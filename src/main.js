@@ -437,6 +437,9 @@ function createZombie(x, z) {
   sprite.health = 30;
   sprite.attackTimer = 0;
   sprite.attackCooldown = 2.0; // Disabled fireball shooting
+  sprite.lastPosition = new THREE.Vector3(x, 1.575, z); // Track for stuck detection
+  sprite.stuckTimer = 0;
+  sprite.unstuckDirection = null;
   
   return sprite;
 }
@@ -556,16 +559,51 @@ function updateZombies(delta) {
       }
     }
     else if (zombie.state === 'chase') {
+      // Check if zombie is stuck
+      const distanceMoved = zombie.position.distanceTo(zombie.lastPosition);
+      if (distanceMoved < 0.05) {
+        zombie.stuckTimer += delta;
+      } else {
+        zombie.stuckTimer = 0;
+        zombie.unstuckDirection = null;
+      }
+      
+      // Determine movement direction
+      let moveDirection;
+      if (zombie.stuckTimer > 0.5) {
+        // Stuck - try to go around obstacle
+        if (!zombie.unstuckDirection) {
+          const angleOffset = (Math.random() - 0.5) * Math.PI;
+          zombie.unstuckDirection = new THREE.Vector3();
+          zombie.unstuckDirection.subVectors(camera.position, zombie.position);
+          zombie.unstuckDirection.y = 0;
+          zombie.unstuckDirection.normalize();
+          
+          // Rotate direction
+          const cos = Math.cos(angleOffset);
+          const sin = Math.sin(angleOffset);
+          const x = zombie.unstuckDirection.x;
+          const z = zombie.unstuckDirection.z;
+          zombie.unstuckDirection.x = x * cos - z * sin;
+          zombie.unstuckDirection.z = x * sin + z * cos;
+        }
+        moveDirection = zombie.unstuckDirection;
+      } else {
+        // Normal chase
+        zombie.direction.subVectors(camera.position, zombie.position);
+        zombie.direction.y = 0;
+        zombie.direction.normalize();
+        moveDirection = zombie.direction;
+      }
+      
       // Move toward player (no shooting)
       if (distToPlayer <= 5) {
         // Too close - back up a bit
-        zombie.direction.subVectors(zombie.position, camera.position);
-        zombie.direction.y = 0;
-        zombie.direction.normalize();
-        
         const moveSpeed = zombie.speed * delta * 0.5;
-        const newX = zombie.position.x + zombie.direction.x * moveSpeed;
-        const newZ = zombie.position.z + zombie.direction.z * moveSpeed;
+        const newX = zombie.position.x - moveDirection.x * moveSpeed;
+        const newZ = zombie.position.z - moveDirection.z * moveSpeed;
+        
+        zombie.lastPosition.copy(zombie.position);
         
         if (!checkWallCollision(newX, newZ)) {
           zombie.position.x = newX;
@@ -573,13 +611,11 @@ function updateZombies(delta) {
         }
       } else {
         // Chase player
-        zombie.direction.subVectors(camera.position, zombie.position);
-        zombie.direction.y = 0;
-        zombie.direction.normalize();
-        
         const moveSpeed = zombie.speed * delta;
-        const newX = zombie.position.x + zombie.direction.x * moveSpeed;
-        const newZ = zombie.position.z + zombie.direction.z * moveSpeed;
+        const newX = zombie.position.x + moveDirection.x * moveSpeed;
+        const newZ = zombie.position.z + moveDirection.z * moveSpeed;
+        
+        zombie.lastPosition.copy(zombie.position);
         
         if (!checkWallCollision(newX, newZ)) {
           zombie.position.x = newX;
@@ -704,6 +740,9 @@ function createVillain(x, z) {
   sprite.attackCooldown = 1.5; // Punches every 1.5 seconds
   sprite.isPunching = false;
   sprite.punchDuration = 0; // Track how long punch animation has been showing
+  sprite.lastPosition = new THREE.Vector3(x, 1.75, z); // Track last position for stuck detection
+  sprite.stuckTimer = 0; // Track how long villain has been stuck
+  sprite.unstuckDirection = null; // Temporary direction when trying to unstuck
   
   return sprite;
 }
@@ -784,13 +823,49 @@ function updateVillains(delta) {
     
     // CHASE or continue walking during punch animation
     if (!villain.isPunching) {
-      villain.direction.subVectors(camera.position, villain.position);
-      villain.direction.y = 0;
-      villain.direction.normalize();
+      // Check if villain is stuck (hasn't moved much)
+      const distanceMoved = villain.position.distanceTo(villain.lastPosition);
+      if (distanceMoved < 0.05) {
+        villain.stuckTimer += delta;
+      } else {
+        villain.stuckTimer = 0;
+        villain.unstuckDirection = null;
+      }
+      
+      // If stuck for more than 0.5 seconds, try to go around obstacle
+      let moveDirection;
+      if (villain.stuckTimer > 0.5) {
+        if (!villain.unstuckDirection) {
+          // Create a new direction with random offset to try to go around
+          const angleOffset = (Math.random() - 0.5) * Math.PI; // Random angle
+          villain.unstuckDirection = new THREE.Vector3();
+          villain.unstuckDirection.subVectors(camera.position, villain.position);
+          villain.unstuckDirection.y = 0;
+          villain.unstuckDirection.normalize();
+          
+          // Rotate the direction by the random angle
+          const cos = Math.cos(angleOffset);
+          const sin = Math.sin(angleOffset);
+          const x = villain.unstuckDirection.x;
+          const z = villain.unstuckDirection.z;
+          villain.unstuckDirection.x = x * cos - z * sin;
+          villain.unstuckDirection.z = x * sin + z * cos;
+        }
+        moveDirection = villain.unstuckDirection;
+      } else {
+        // Normal chase behavior - move directly toward player
+        villain.direction.subVectors(camera.position, villain.position);
+        villain.direction.y = 0;
+        villain.direction.normalize();
+        moveDirection = villain.direction;
+      }
       
       const moveSpeed = villain.speed * delta;
-      const newX = villain.position.x + villain.direction.x * moveSpeed;
-      const newZ = villain.position.z + villain.direction.z * moveSpeed;
+      const newX = villain.position.x + moveDirection.x * moveSpeed;
+      const newZ = villain.position.z + moveDirection.z * moveSpeed;
+      
+      // Update last position before moving
+      villain.lastPosition.copy(villain.position);
       
       if (!checkWallCollision(newX, newZ)) {
         villain.position.x = newX;
