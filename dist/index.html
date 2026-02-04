@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>FPS Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; touch-action: none; }
+    canvas { display: block; }
+    #crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      z-index: 100;
+    }
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.8);
+    }
+    #crosshair::before {
+      width: 2px;
+      height: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    #crosshair::after {
+      width: 100%;
+      height: 2px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    #blocker {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+    }
+    #instructions {
+      color: white;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    #instructions h1 { font-size: 36px; margin-bottom: 20px; }
+    #instructions p { font-size: 16px; line-height: 1.6; }
+    #hud {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: white;
+      font-family: monospace;
+      font-size: 16px;
+      z-index: 100;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    }
+    
+    /* Mobile Controls */
+    .mobile-controls {
+      display: none;
+      position: fixed;
+      z-index: 150;
+      pointer-events: none;
+    }
+    .mobile-controls.active {
+      display: block;
+    }
+    
+    /* Joystick */
+    #joystick-zone {
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      width: 40%;
+      height: 50%;
+      pointer-events: auto;
+    }
+    #joystick-base {
+      position: absolute;
+      left: 30px;
+      bottom: 30px;
+      width: 120px;
+      height: 120px;
+      background: rgba(255,255,255,0.2);
+      border: 3px solid rgba(255,255,255,0.4);
+      border-radius: 50%;
+    }
+    #joystick-stick {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 50px;
+      height: 50px;
+      background: rgba(255,255,255,0.6);
+      border-radius: 50%;
+    }
+    
+    /* Look zone (right side of screen) */
+    #look-zone {
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 60%;
+      height: 70%;
+      pointer-events: auto;
+    }
+    
+    /* Action buttons */
+    #shoot-btn {
+      position: fixed;
+      right: 30px;
+      bottom: 30px;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 50, 50, 0.6);
+      border: 3px solid rgba(255,255,255,0.6);
+      border-radius: 50%;
+      pointer-events: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      color: white;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    #shoot-btn:active {
+      background: rgba(255, 100, 100, 0.8);
+    }
+    
+    #jump-btn {
+      position: fixed;
+      right: 130px;
+      bottom: 30px;
+      width: 60px;
+      height: 60px;
+      background: rgba(50, 150, 255, 0.6);
+      border: 3px solid rgba(255,255,255,0.6);
+      border-radius: 50%;
+      pointer-events: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 20px;
+      color: white;
+      font-weight: bold;
+    }
+    #jump-btn:active {
+      background: rgba(100, 180, 255, 0.8);
+    }
+    
+    /* Turn buttons */
+    #turn-left, #turn-right {
+      position: fixed;
+      bottom: 120px;
+      width: 50px;
+      height: 50px;
+      background: rgba(150, 150, 150, 0.6);
+      border: 3px solid rgba(255,255,255,0.6);
+      border-radius: 50%;
+      pointer-events: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      color: white;
+    }
+    #turn-left { right: 140px; }
+    #turn-right { right: 30px; }
+    #turn-left:active, #turn-right:active {
+      background: rgba(200, 200, 200, 0.8);
+    }
+    
+    /* Damage flash overlay */
+    #damage-flash {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse at center, transparent 0%, rgba(255, 0, 0, 0.6) 100%);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 90;
+      transition: opacity 0.1s ease-out;
+    }
+    #damage-flash.active {
+      opacity: 1;
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-Dmf7NxNG.js"></script>
+</head>
+<body>
+  <div id="blocker">
+    <div id="instructions" style="cursor: pointer;">
+      <h1>🎮 FPS GAME</h1>
+      <p id="desktop-instructions"><strong>CLICK ANYWHERE TO PLAY</strong><br>WASD - Move | SPACE - Jump | MOUSE - Look | CLICK - Shoot</p>
+      <p id="mobile-instructions" style="display:none;">Tap to play<br>Left joystick - Move | Drag right side - Look<br>🔴 Shoot | 🔵 Jump</p>
+    </div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="damage-flash"></div>
+  <div id="hud">
+    <div>Health: <span id="health">100</span></div>
+    <div>Ammo: <span id="ammo">30</span></div>
+  </div>
+  
+  <!-- Mobile Controls -->
+  <div class="mobile-controls" id="mobile-controls">
+    <div id="joystick-zone">
+      <div id="joystick-base">
+        <div id="joystick-stick"></div>
+      </div>
+    </div>
+    <div id="look-zone"></div>
+    <div id="shoot-btn">🔫</div>
+    <div id="jump-btn">⬆</div>
+    <div id="turn-left">◀</div>
+    <div id="turn-right">▶</div>
+  </div>
+  
+</body>
+</html>
