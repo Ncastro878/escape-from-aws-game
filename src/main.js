@@ -884,6 +884,14 @@ function shoot() {
   
   document.getElementById('ammo').textContent = '∞';
   
+  // Play gunshot sound effect
+  const gunshotSound = document.getElementById('gunshot-sound');
+  if (gunshotSound) {
+    gunshotSound.currentTime = 0; // Reset to start for rapid fire
+    gunshotSound.volume = 0.4; // Set volume
+    gunshotSound.play().catch(e => console.log('Gunshot sound failed:', e));
+  }
+  
   // Show firing sprite - use preloaded images
   const weaponSprite = document.getElementById('weapon-sprite');
   if (weaponSprite) {
