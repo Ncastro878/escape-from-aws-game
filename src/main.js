@@ -561,21 +561,19 @@ function updateZombies(delta) {
     else if (zombie.state === 'chase') {
       // Check if zombie is stuck
       const distanceMoved = zombie.position.distanceTo(zombie.lastPosition);
-      if (distanceMoved < 0.1) {
+      if (distanceMoved < 0.05) {
         zombie.stuckTimer += delta;
       } else {
         zombie.stuckTimer = 0;
         zombie.unstuckDirection = null;
-        zombie.unstuckAttempts = 0;
       }
       
       // Determine movement direction
       let moveDirection;
-      if (zombie.stuckTimer > 0.2) {
+      if (zombie.stuckTimer > 0.5) {
         // Stuck - try to go around obstacle
-        if (!zombie.unstuckDirection || zombie.stuckTimer > 1.0) {
-          zombie.unstuckAttempts = (zombie.unstuckAttempts || 0) + 1;
-          const angleOffset = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2 + Math.random() * Math.PI / 2); // 90-180 degrees
+        if (!zombie.unstuckDirection) {
+          const angleOffset = (Math.random() - 0.5) * Math.PI;
           zombie.unstuckDirection = new THREE.Vector3();
           zombie.unstuckDirection.subVectors(camera.position, zombie.position);
           zombie.unstuckDirection.y = 0;
@@ -588,9 +586,6 @@ function updateZombies(delta) {
           const z = zombie.unstuckDirection.z;
           zombie.unstuckDirection.x = x * cos - z * sin;
           zombie.unstuckDirection.z = x * sin + z * cos;
-          
-          // Reset timer to try this direction
-          if (zombie.stuckTimer > 1.0) zombie.stuckTimer = 0.2;
         }
         moveDirection = zombie.unstuckDirection;
       } else {
@@ -830,36 +825,31 @@ function updateVillains(delta) {
     if (!villain.isPunching) {
       // Check if villain is stuck (hasn't moved much)
       const distanceMoved = villain.position.distanceTo(villain.lastPosition);
-      if (distanceMoved < 0.1) {
+      if (distanceMoved < 0.05) {
         villain.stuckTimer += delta;
       } else {
         villain.stuckTimer = 0;
         villain.unstuckDirection = null;
-        villain.unstuckAttempts = 0;
       }
       
-      // If stuck for more than 0.2 seconds, try to go around obstacle
+      // If stuck for more than 0.5 seconds, try to go around obstacle
       let moveDirection;
-      if (villain.stuckTimer > 0.2) {
-        if (!villain.unstuckDirection || villain.stuckTimer > 1.0) {
-          // Create a new direction with large random offset to try to go around
-          villain.unstuckAttempts = (villain.unstuckAttempts || 0) + 1;
-          const angleOffset = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2 + Math.random() * Math.PI / 2); // 90-180 degrees left or right
+      if (villain.stuckTimer > 0.5) {
+        if (!villain.unstuckDirection) {
+          // Create a new direction with random offset to try to go around
+          const angleOffset = (Math.random() - 0.5) * Math.PI; // Random angle
           villain.unstuckDirection = new THREE.Vector3();
           villain.unstuckDirection.subVectors(camera.position, villain.position);
           villain.unstuckDirection.y = 0;
           villain.unstuckDirection.normalize();
           
-          // Rotate the direction by the angle
+          // Rotate the direction by the random angle
           const cos = Math.cos(angleOffset);
           const sin = Math.sin(angleOffset);
           const x = villain.unstuckDirection.x;
           const z = villain.unstuckDirection.z;
           villain.unstuckDirection.x = x * cos - z * sin;
           villain.unstuckDirection.z = x * sin + z * cos;
-          
-          // Reset timer to try this direction for a bit
-          if (villain.stuckTimer > 1.0) villain.stuckTimer = 0.2;
         }
         moveDirection = villain.unstuckDirection;
       } else {
