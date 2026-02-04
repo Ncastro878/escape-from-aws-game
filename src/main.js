@@ -925,7 +925,7 @@ const bulletMaterial = new THREE.MeshBasicMaterial({
 
 // Blood particles
 const bloodParticles = [];
-const bloodGeometry = new THREE.SphereGeometry(0.08, 4, 4); // Smaller droplets
+const bloodGeometry = new THREE.SphereGeometry(0.04, 4, 4); // Even smaller droplets
 
 function createBloodSplatter(position) {
   // Create 8-12 blood particles
