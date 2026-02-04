@@ -788,7 +788,9 @@ function updateVillains(delta) {
         // Play punch sound effect (40% chance to play voice instead)
         const playVoice = Math.random() < 0.4;
         if (playVoice) {
-          const villainVoiceSound = document.getElementById('villain-voice-sound');
+          // Randomly pick between the two villain voice lines
+          const voiceChoice = Math.random() < 0.5 ? 'villain-voice-sound' : 'villain-voice2-sound';
+          const villainVoiceSound = document.getElementById(voiceChoice);
           if (villainVoiceSound) {
             villainVoiceSound.currentTime = 0;
             villainVoiceSound.volume = 0.7;
