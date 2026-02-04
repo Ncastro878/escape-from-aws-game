@@ -470,6 +470,13 @@
       });
       
       startMenu.style.display = 'none';
+      
+      // Trigger the actual game start event (simulate clicking blocker)
+      const blocker = document.getElementById('blocker');
+      const instructions = document.getElementById('instructions');
+      if (blocker && instructions) {
+        instructions.click();
+      }
     });
   </script>
   
