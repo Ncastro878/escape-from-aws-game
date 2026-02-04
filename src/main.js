@@ -708,6 +708,14 @@ function updateVillains(delta) {
     
     // Remove dead villains
     if (villain.health <= 0) {
+      // Play death sound
+      const deathSound = document.getElementById('villain-death-sound');
+      if (deathSound) {
+        deathSound.currentTime = 0;
+        deathSound.volume = 0.5;
+        deathSound.play().catch(e => console.log('Villain death sound failed:', e));
+      }
+      
       scene.remove(villain);
       villains.splice(i, 1);
       continue;
