@@ -332,6 +332,11 @@
     <source src="/menu-music.mp3" type="audio/mpeg">
   </audio>
   
+  <!-- Gameplay Music -->
+  <audio id="gameplay-music" loop>
+    <source src="/gameplay-music.mp3" type="audio/mpeg">
+  </audio>
+  
   <style>
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -376,6 +381,7 @@
     const startMenu = document.getElementById('start-menu');
     const startMenuImg = document.getElementById('start-menu-img');
     const menuMusic = document.getElementById('menu-music');
+    const gameplayMusic = document.getElementById('gameplay-music');
     const muteBtn = document.getElementById('mute-btn');
     const images = ['/start-menu-1.png', '/start-menu-2.png'];
     let currentImageIndex = 0;
@@ -383,6 +389,7 @@
     let isMuted = false;
     
     menuMusic.volume = 0.5; // Set volume to 50%
+    gameplayMusic.volume = 0.5; // Set volume to 50%
 
     // Entry screen - click to enter and start music
     entryScreen.addEventListener('click', () => {
@@ -421,6 +428,7 @@
       e.stopPropagation(); // Prevent starting the game
       isMuted = !isMuted;
       menuMusic.muted = isMuted;
+      gameplayMusic.muted = isMuted;
       muteBtn.textContent = isMuted ? '🔇' : '🔊';
     });
 
@@ -428,8 +436,18 @@
     startMenu.addEventListener('click', (e) => {
       if (e.target === muteBtn || muteBtn.contains(e.target)) return; // Don't start game if clicking mute button
       clearInterval(intervalId);
-      menuMusic.pause(); // Stop the music
-      menuMusic.currentTime = 0; // Reset to beginning
+      
+      // Stop menu music
+      menuMusic.pause();
+      menuMusic.currentTime = 0;
+      
+      // Start gameplay music
+      gameplayMusic.play().then(() => {
+        console.log('Gameplay music started');
+      }).catch(e => {
+        console.log('Gameplay music play failed:', e);
+      });
+      
       startMenu.style.display = 'none';
     });
   </script>
