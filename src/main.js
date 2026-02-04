@@ -568,14 +568,15 @@ function updateZombies(delta) {
       }
     }
     else if (zombie.state === 'chase') {
-      // Move toward player (no shooting)
-      if (distToPlayer <= 5) {
-        // Too close - back up a bit
-        zombie.direction.subVectors(zombie.position, camera.position);
+      const minDistance = 2.0; // Minimum distance to stay visible
+      
+      // Chase player but stop at minimum distance
+      if (distToPlayer > minDistance) {
+        zombie.direction.subVectors(camera.position, zombie.position);
         zombie.direction.y = 0;
         zombie.direction.normalize();
         
-        const moveSpeed = zombie.speed * delta * 0.5;
+        const moveSpeed = zombie.speed * delta;
         const newX = zombie.position.x + zombie.direction.x * moveSpeed;
         const newZ = zombie.position.z + zombie.direction.z * moveSpeed;
         
@@ -583,13 +584,14 @@ function updateZombies(delta) {
           zombie.position.x = newX;
           zombie.position.z = newZ;
         }
-      } else {
-        // Chase player
-        zombie.direction.subVectors(camera.position, zombie.position);
+      }
+      // If too close (somehow got past minimum), back up slightly
+      else if (distToPlayer < minDistance - 0.5) {
+        zombie.direction.subVectors(zombie.position, camera.position);
         zombie.direction.y = 0;
         zombie.direction.normalize();
         
-        const moveSpeed = zombie.speed * delta;
+        const moveSpeed = zombie.speed * delta * 0.3;
         const newX = zombie.position.x + zombie.direction.x * moveSpeed;
         const newZ = zombie.position.z + zombie.direction.z * moveSpeed;
         
@@ -818,14 +820,19 @@ function updateVillains(delta) {
       villain.direction.y = 0;
       villain.direction.normalize();
       
-      const moveSpeed = villain.speed * delta;
-      const newX = villain.position.x + villain.direction.x * moveSpeed;
-      const newZ = villain.position.z + villain.direction.z * moveSpeed;
-      
-      if (!checkWallCollision(newX, newZ)) {
-        villain.position.x = newX;
-        villain.position.z = newZ;
+      // Only move if not too close to player (prevents disappearing behind camera)
+      const minDistance = 2.5; // Stay at least this far from player
+      if (distToPlayer > minDistance) {
+        const moveSpeed = villain.speed * delta;
+        const newX = villain.position.x + villain.direction.x * moveSpeed;
+        const newZ = villain.position.z + villain.direction.z * moveSpeed;
+        
+        if (!checkWallCollision(newX, newZ)) {
+          villain.position.x = newX;
+          villain.position.z = newZ;
+        }
       }
+    }
       
       // Walking animation (alternate between walk1 and walk2)
       villain.walkAnimationTime += delta * 4;
