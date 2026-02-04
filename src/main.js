@@ -488,6 +488,23 @@ function updateZombies(delta) {
     
     const distToPlayer = zombie.position.distanceTo(camera.position);
     
+    // Zombie touch damage
+    if (distToPlayer < 1.5) {
+      // Add damage cooldown to prevent rapid damage
+      if (!zombie.lastDamageTime || Date.now() - zombie.lastDamageTime > 500) {
+        player.health -= 3;
+        document.getElementById('health').textContent = Math.round(player.health);
+        zombie.lastDamageTime = Date.now();
+        
+        // Visual feedback
+        const damageFlash = document.getElementById('damage-flash');
+        if (damageFlash) {
+          damageFlash.classList.add('active');
+          setTimeout(() => damageFlash.classList.remove('active'), 150);
+        }
+      }
+    }
+    
     // === AI STATE MACHINE ===
     
     // Check if zombie can see player (within 30 units and line of sight)
@@ -575,6 +592,71 @@ function updateZombies(delta) {
     
     // Always face camera (billboard sprite)
     zombie.lookAt(camera.position.x, zombie.position.y, camera.position.z);
+  }
+}
+
+// ========== HEALTH PACKS ==========
+const healthPacks = [];
+const healthPackTexture = textureLoader.load('/health-pack.png');
+
+function createHealthPack(x, z) {
+  const spriteMaterial = new THREE.SpriteMaterial({ 
+    map: healthPackTexture,
+    transparent: true
+  });
+  
+  const sprite = new THREE.Sprite(spriteMaterial);
+  sprite.scale.set(1.5, 1.5, 1);
+  sprite.position.set(x, 1, z);
+  sprite.bobTime = Math.random() * Math.PI * 2; // For floating animation
+  
+  return sprite;
+}
+
+// Spawn health packs around the map
+const healthPackPositions = [
+  [10, 10], [-10, 10], [10, -10], [-10, -10],
+  [20, 0], [-20, 0], [0, 20], [0, -20],
+  [15, 15], [-15, -15], [15, -15], [-15, 15]
+];
+
+healthPackPositions.forEach(pos => {
+  const pack = createHealthPack(pos[0], pos[1]);
+  healthPacks.push(pack);
+  scene.add(pack);
+});
+
+function updateHealthPacks(delta) {
+  for (let i = healthPacks.length - 1; i >= 0; i--) {
+    const pack = healthPacks[i];
+    
+    // Floating animation
+    pack.bobTime += delta * 2;
+    pack.position.y = 1 + Math.sin(pack.bobTime) * 0.2;
+    
+    // Always face camera (billboard)
+    pack.lookAt(camera.position);
+    
+    // Check if player picks it up
+    const distToPlayer = pack.position.distanceTo(camera.position);
+    if (distToPlayer < 2) {
+      // Restore health to 100!
+      if (player.health < 100) {
+        player.health = 100;
+        document.getElementById('health').textContent = '100';
+        
+        // Green flash effect!
+        const healFlash = document.getElementById('heal-flash');
+        if (healFlash) {
+          healFlash.classList.add('active');
+          setTimeout(() => healFlash.classList.remove('active'), 300);
+        }
+        
+        // Remove the health pack
+        scene.remove(pack);
+        healthPacks.splice(i, 1);
+      }
+    }
   }
 }
 
@@ -1122,6 +1204,17 @@ function animate() {
     updateFireballs(delta);
     updateZombies(delta);
     updateVillains(delta);
+    updateHealthPacks(delta);
+    
+    // Low health warning
+    const lowHealthWarning = document.getElementById('low-health-warning');
+    if (lowHealthWarning) {
+      if (player.health <= 30 && player.health > 0) {
+        lowHealthWarning.classList.add('active');
+      } else {
+        lowHealthWarning.classList.remove('active');
+      }
+    }
     
     // Check game over
     if (player.health <= 0) {

@@ -34,6 +34,31 @@
       background: #000;
     }
     
+    /* Mute button */
+    #mute-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 3px solid rgba(255, 255, 255, 0.6);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 30px;
+      cursor: pointer;
+      z-index: 301;
+      transition: background 0.2s;
+    }
+    #mute-btn:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+    #mute-btn.hidden {
+      display: none;
+    }
+    
     /* Mobile - fill screen without cropping */
     @media (max-aspect-ratio: 1/1) {
       #start-menu img {
@@ -221,6 +246,47 @@
       opacity: 1;
     }
     
+    /* Heal flash overlay */
+    #heal-flash {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 255, 0, 0.6) 100%);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 90;
+      transition: opacity 0.2s ease-out;
+    }
+    #heal-flash.active {
+      opacity: 1;
+    }
+    
+    /* Low Health Warning */
+    #low-health-warning {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 10px solid rgba(255, 0, 0, 0);
+      pointer-events: none;
+      z-index: 85;
+      box-sizing: border-box;
+    }
+    #low-health-warning.active {
+      animation: lowHealthPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes lowHealthPulse {
+      0%, 100% {
+        border-color: rgba(255, 0, 0, 0.3);
+      }
+      50% {
+        border-color: rgba(255, 0, 0, 0.8);
+      }
+    }
+    
     /* Doom-style weapon sprite */
     #weapon-sprite {
       position: fixed;
@@ -250,7 +316,13 @@
   <!-- Start Menu -->
   <div id="start-menu">
     <img id="start-menu-img" src="/start-menu-1.png" alt="Start Menu">
+    <div id="mute-btn" title="Toggle Music">🔊</div>
   </div>
+  
+  <!-- Menu Music -->
+  <audio id="menu-music" loop>
+    <source src="/menu-music.mp3" type="audio/mpeg">
+  </audio>
   
   <div id="blocker">
     <div id="instructions" style="cursor: pointer;">
@@ -261,6 +333,8 @@
   </div>
   <div id="crosshair"></div>
   <div id="damage-flash"></div>
+  <div id="heal-flash"></div>
+  <div id="low-health-warning"></div>
   <img id="weapon-sprite" src="/gun-idle.png" alt="Weapon" style="display: none;">
   <div id="hud">
     <div>Health: <span id="health">100</span></div>
@@ -285,9 +359,12 @@
     // Start Menu Logic
     const startMenu = document.getElementById('start-menu');
     const startMenuImg = document.getElementById('start-menu-img');
+    const menuMusic = document.getElementById('menu-music');
+    const muteBtn = document.getElementById('mute-btn');
     const images = ['/start-menu-1.png', '/start-menu-2.png'];
     let currentImageIndex = 0;
     let intervalId;
+    let isMuted = false;
 
     // Alternate images every 1 second
     function alternateImages() {
@@ -299,12 +376,41 @@
 
     // Start alternating when page loads
     alternateImages();
+    
+    // Play menu music (with user interaction requirement)
+    function playMenuMusic() {
+      menuMusic.volume = 0.5; // Set volume to 50%
+      menuMusic.play().catch(e => {
+        console.log('Music autoplay blocked, waiting for user interaction');
+      });
+    }
+    
+    // Try to play music immediately
+    playMenuMusic();
+    
+    // Mute button toggle
+    muteBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent starting the game
+      isMuted = !isMuted;
+      menuMusic.muted = isMuted;
+      muteBtn.textContent = isMuted ? '🔇' : '🔊';
+    });
 
     // Click to start game
     startMenu.addEventListener('click', () => {
       clearInterval(intervalId);
+      menuMusic.pause(); // Stop the music
+      menuMusic.currentTime = 0; // Reset to beginning
       startMenu.classList.add('hidden');
+      muteBtn.classList.add('hidden'); // Hide mute button
     });
+    
+    // Ensure music plays on first user interaction if blocked
+    document.addEventListener('click', () => {
+      if (menuMusic.paused && !startMenu.classList.contains('hidden')) {
+        playMenuMusic();
+      }
+    }, { once: true });
   </script>
   
   <script type="module" src="/src/main.js"></script>
