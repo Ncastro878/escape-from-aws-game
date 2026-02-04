@@ -739,6 +739,14 @@ function updateVillains(delta) {
         player.health -= 15; // Heavy punch!
         document.getElementById('health').textContent = Math.round(player.health);
         
+        // Play punch sound effect
+        const punchSound = document.getElementById('zombie-punch-sound');
+        if (punchSound) {
+          punchSound.currentTime = 0; // Reset to start
+          punchSound.volume = 0.6; // Set volume
+          punchSound.play().catch(e => console.log('Punch sound failed:', e));
+        }
+        
         // Visual feedback
         const damageFlash = document.getElementById('damage-flash');
         if (damageFlash) {
