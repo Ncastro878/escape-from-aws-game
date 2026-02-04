@@ -923,6 +923,57 @@ const bulletMaterial = new THREE.MeshBasicMaterial({
   opacity: 0
 });
 
+// Blood particles
+const bloodParticles = [];
+const bloodGeometry = new THREE.SphereGeometry(0.15, 4, 4);
+
+function createBloodSplatter(position) {
+  // Create 8-12 blood particles
+  const numParticles = 8 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < numParticles; i++) {
+    // Create unique material for each particle so we can fade individually
+    const particleMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0xff0000,
+      transparent: true,
+      opacity: 1
+    });
+    const particle = new THREE.Mesh(bloodGeometry, particleMaterial);
+    particle.position.copy(position);
+    
+    // Random velocity in all directions
+    particle.velocity = new THREE.Vector3(
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10
+    );
+    particle.lifetime = 0.5 + Math.random() * 0.3; // 0.5-0.8 seconds
+    
+    bloodParticles.push(particle);
+    scene.add(particle);
+  }
+}
+
+function updateBloodParticles(delta) {
+  for (let i = bloodParticles.length - 1; i >= 0; i--) {
+    const particle = bloodParticles[i];
+    
+    // Move particle
+    particle.position.add(particle.velocity.clone().multiplyScalar(delta));
+    
+    // Gravity
+    particle.velocity.y -= 20 * delta;
+    
+    // Fade out
+    particle.lifetime -= delta;
+    particle.material.opacity = particle.lifetime / 0.8;
+    
+    if (particle.lifetime <= 0) {
+      scene.remove(particle);
+      bloodParticles.splice(i, 1);
+    }
+  }
+}
+
 // ========== ZOMBIE FIREBALLS ==========
 const fireballs = [];
 const fireballGeometry = new THREE.SphereGeometry(0.3, 12, 12);
@@ -993,6 +1044,9 @@ function updateBullets(delta) {
       if (bullet.position.distanceTo(zombie.position) < 1.5) {
         zombie.health -= 10;
         
+        // Blood splatter effect
+        createBloodSplatter(zombie.position.clone());
+        
         // Flash red on hit
         zombie.material.color.setHex(0xff0000);
         setTimeout(() => zombie.material.color.setHex(0xffffff), 100);
@@ -1007,6 +1061,9 @@ function updateBullets(delta) {
     for (const villain of villains) {
       if (bullet.position.distanceTo(villain.position) < 1.5) {
         villain.health -= 10;
+        
+        // Blood splatter effect
+        createBloodSplatter(villain.position.clone());
         
         // Flash red on hit
         villain.material.color.setHex(0xff0000);
@@ -1283,6 +1340,7 @@ function animate() {
     updateZombies(delta);
     updateVillains(delta);
     updateHealthPacks(delta);
+    updateBloodParticles(delta);
     
     // Low health warning
     const lowHealthWarning = document.getElementById('low-health-warning');
