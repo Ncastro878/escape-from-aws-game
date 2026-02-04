@@ -378,39 +378,50 @@
     alternateImages();
     
     // Play menu music (with user interaction requirement)
-    function playMenuMusic() {
-      menuMusic.volume = 0.5; // Set volume to 50%
-      menuMusic.play().catch(e => {
-        console.log('Music autoplay blocked, waiting for user interaction');
-      });
+    menuMusic.volume = 0.5; // Set volume to 50%
+    let musicStarted = false;
+    
+    // Start music on any user interaction
+    function startMusic() {
+      if (!musicStarted && !startMenu.classList.contains('hidden')) {
+        menuMusic.play().then(() => {
+          console.log('Menu music playing');
+          musicStarted = true;
+        }).catch(e => {
+          console.log('Music play failed:', e);
+        });
+      }
     }
     
-    // Try to play music immediately
-    playMenuMusic();
+    // Try to autoplay (won't work on most browsers)
+    startMusic();
+    
+    // Play on any interaction with the page
+    ['click', 'touchstart', 'keydown'].forEach(event => {
+      document.addEventListener(event, startMusic, { once: true });
+    });
     
     // Mute button toggle
     muteBtn.addEventListener('click', (e) => {
       e.stopPropagation(); // Prevent starting the game
+      startMusic(); // Ensure music is playing
       isMuted = !isMuted;
       menuMusic.muted = isMuted;
       muteBtn.textContent = isMuted ? '🔇' : '🔊';
     });
 
     // Click to start game
-    startMenu.addEventListener('click', () => {
-      clearInterval(intervalId);
-      menuMusic.pause(); // Stop the music
-      menuMusic.currentTime = 0; // Reset to beginning
-      startMenu.classList.add('hidden');
-      muteBtn.classList.add('hidden'); // Hide mute button
+    startMenu.addEventListener('click', (e) => {
+      if (e.target === muteBtn || muteBtn.contains(e.target)) return; // Don't start game if clicking mute button
+      startMusic(); // Ensure music started before stopping
+      setTimeout(() => {
+        clearInterval(intervalId);
+        menuMusic.pause(); // Stop the music
+        menuMusic.currentTime = 0; // Reset to beginning
+        startMenu.classList.add('hidden');
+        muteBtn.classList.add('hidden'); // Hide mute button
+      }, 100);
     });
-    
-    // Ensure music plays on first user interaction if blocked
-    document.addEventListener('click', () => {
-      if (menuMusic.paused && !startMenu.classList.contains('hidden')) {
-        playMenuMusic();
-      }
-    }, { once: true });
   </script>
   
   <script type="module" src="/src/main.js"></script>
