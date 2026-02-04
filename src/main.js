@@ -507,7 +507,9 @@ function updateZombies(delta) {
         // Play zombie attack sound (40% chance to play voice instead)
         const playVoice = Math.random() < 0.4;
         if (playVoice) {
-          const zombieVoiceSound = document.getElementById('zombie-voice-sound');
+          // Randomly pick between the two voice lines
+          const voiceChoice = Math.random() < 0.5 ? 'zombie-voice-sound' : 'zombie-voice2-sound';
+          const zombieVoiceSound = document.getElementById(voiceChoice);
           if (zombieVoiceSound) {
             zombieVoiceSound.currentTime = 0;
             zombieVoiceSound.volume = 0.6;
