@@ -504,12 +504,22 @@ function updateZombies(delta) {
         document.getElementById('health').textContent = Math.round(player.health);
         zombie.lastDamageTime = Date.now();
         
-        // Play zombie attack sound
-        const zombieAttackSound = document.getElementById('zombie-attack-sound');
-        if (zombieAttackSound) {
-          zombieAttackSound.currentTime = 0;
-          zombieAttackSound.volume = 0.5;
-          zombieAttackSound.play().catch(e => console.log('Zombie attack sound failed:', e));
+        // Play zombie attack sound (40% chance to play voice instead)
+        const playVoice = Math.random() < 0.4;
+        if (playVoice) {
+          const zombieVoiceSound = document.getElementById('zombie-voice-sound');
+          if (zombieVoiceSound) {
+            zombieVoiceSound.currentTime = 0;
+            zombieVoiceSound.volume = 0.6;
+            zombieVoiceSound.play().catch(e => console.log('Zombie voice sound failed:', e));
+          }
+        } else {
+          const zombieAttackSound = document.getElementById('zombie-attack-sound');
+          if (zombieAttackSound) {
+            zombieAttackSound.currentTime = 0;
+            zombieAttackSound.volume = 0.5;
+            zombieAttackSound.play().catch(e => console.log('Zombie attack sound failed:', e));
+          }
         }
         
         // Visual feedback
