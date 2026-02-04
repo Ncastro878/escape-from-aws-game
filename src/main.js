@@ -559,28 +559,56 @@ function updateZombies(delta) {
       }
     }
     else if (zombie.state === 'chase') {
-      // Always move directly toward player
-      zombie.direction.subVectors(camera.position, zombie.position);
-      zombie.direction.y = 0;
-      zombie.direction.normalize();
-      
-      // Check if stuck
+      // Check if zombie is stuck
       const distanceMoved = zombie.position.distanceTo(zombie.lastPosition);
-      if (distanceMoved < 0.02) {
-        zombie.stuckTimer = (zombie.stuckTimer || 0) + delta;
+      if (distanceMoved < 0.1) {
+        zombie.stuckTimer += delta;
       } else {
         zombie.stuckTimer = 0;
+        zombie.unstuckDirection = null;
+        zombie.unstuckAttempts = 0;
       }
       
-      // Update last position
-      zombie.lastPosition.copy(zombie.position);
+      // Determine movement direction
+      let moveDirection;
+      if (zombie.stuckTimer > 0.2) {
+        // Stuck - try to go around obstacle
+        if (!zombie.unstuckDirection || zombie.stuckTimer > 1.0) {
+          zombie.unstuckAttempts = (zombie.unstuckAttempts || 0) + 1;
+          const angleOffset = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2 + Math.random() * Math.PI / 2); // 90-180 degrees
+          zombie.unstuckDirection = new THREE.Vector3();
+          zombie.unstuckDirection.subVectors(camera.position, zombie.position);
+          zombie.unstuckDirection.y = 0;
+          zombie.unstuckDirection.normalize();
+          
+          // Rotate direction
+          const cos = Math.cos(angleOffset);
+          const sin = Math.sin(angleOffset);
+          const x = zombie.unstuckDirection.x;
+          const z = zombie.unstuckDirection.z;
+          zombie.unstuckDirection.x = x * cos - z * sin;
+          zombie.unstuckDirection.z = x * sin + z * cos;
+          
+          // Reset timer to try this direction
+          if (zombie.stuckTimer > 1.0) zombie.stuckTimer = 0.2;
+        }
+        moveDirection = zombie.unstuckDirection;
+      } else {
+        // Normal chase
+        zombie.direction.subVectors(camera.position, zombie.position);
+        zombie.direction.y = 0;
+        zombie.direction.normalize();
+        moveDirection = zombie.direction;
+      }
       
-      // Move toward player
+      // Move toward player (no shooting)
       if (distToPlayer <= 5) {
         // Too close - back up a bit
         const moveSpeed = zombie.speed * delta * 0.5;
-        const newX = zombie.position.x - zombie.direction.x * moveSpeed;
-        const newZ = zombie.position.z - zombie.direction.z * moveSpeed;
+        const newX = zombie.position.x - moveDirection.x * moveSpeed;
+        const newZ = zombie.position.z - moveDirection.z * moveSpeed;
+        
+        zombie.lastPosition.copy(zombie.position);
         
         if (!checkWallCollision(newX, newZ)) {
           zombie.position.x = newX;
@@ -589,21 +617,14 @@ function updateZombies(delta) {
       } else {
         // Chase player
         const moveSpeed = zombie.speed * delta;
-        const newX = zombie.position.x + zombie.direction.x * moveSpeed;
-        const newZ = zombie.position.z + zombie.direction.z * moveSpeed;
+        const newX = zombie.position.x + moveDirection.x * moveSpeed;
+        const newZ = zombie.position.z + moveDirection.z * moveSpeed;
+        
+        zombie.lastPosition.copy(zombie.position);
         
         if (!checkWallCollision(newX, newZ)) {
           zombie.position.x = newX;
           zombie.position.z = newZ;
-        } else if (zombie.stuckTimer > 1.0) {
-          // If stuck for over 1 second, try moving perpendicular
-          const perpX = zombie.position.x - zombie.direction.z * moveSpeed * 2;
-          const perpZ = zombie.position.z + zombie.direction.x * moveSpeed * 2;
-          if (!checkWallCollision(perpX, perpZ)) {
-            zombie.position.x = perpX;
-            zombie.position.z = perpZ;
-            zombie.stuckTimer = 0;
-          }
         }
       }
     }
@@ -807,39 +828,58 @@ function updateVillains(delta) {
     
     // CHASE or continue walking during punch animation
     if (!villain.isPunching) {
-      // Always move directly toward player
-      villain.direction.subVectors(camera.position, villain.position);
-      villain.direction.y = 0;
-      villain.direction.normalize();
-      
-      const moveSpeed = villain.speed * delta;
-      const newX = villain.position.x + villain.direction.x * moveSpeed;
-      const newZ = villain.position.z + villain.direction.z * moveSpeed;
-      
-      // Check if stuck (hasn't moved)
+      // Check if villain is stuck (hasn't moved much)
       const distanceMoved = villain.position.distanceTo(villain.lastPosition);
-      if (distanceMoved < 0.02) {
-        villain.stuckTimer = (villain.stuckTimer || 0) + delta;
+      if (distanceMoved < 0.1) {
+        villain.stuckTimer += delta;
       } else {
         villain.stuckTimer = 0;
+        villain.unstuckDirection = null;
+        villain.unstuckAttempts = 0;
       }
       
-      // Update last position
+      // If stuck for more than 0.2 seconds, try to go around obstacle
+      let moveDirection;
+      if (villain.stuckTimer > 0.2) {
+        if (!villain.unstuckDirection || villain.stuckTimer > 1.0) {
+          // Create a new direction with large random offset to try to go around
+          villain.unstuckAttempts = (villain.unstuckAttempts || 0) + 1;
+          const angleOffset = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2 + Math.random() * Math.PI / 2); // 90-180 degrees left or right
+          villain.unstuckDirection = new THREE.Vector3();
+          villain.unstuckDirection.subVectors(camera.position, villain.position);
+          villain.unstuckDirection.y = 0;
+          villain.unstuckDirection.normalize();
+          
+          // Rotate the direction by the angle
+          const cos = Math.cos(angleOffset);
+          const sin = Math.sin(angleOffset);
+          const x = villain.unstuckDirection.x;
+          const z = villain.unstuckDirection.z;
+          villain.unstuckDirection.x = x * cos - z * sin;
+          villain.unstuckDirection.z = x * sin + z * cos;
+          
+          // Reset timer to try this direction for a bit
+          if (villain.stuckTimer > 1.0) villain.stuckTimer = 0.2;
+        }
+        moveDirection = villain.unstuckDirection;
+      } else {
+        // Normal chase behavior - move directly toward player
+        villain.direction.subVectors(camera.position, villain.position);
+        villain.direction.y = 0;
+        villain.direction.normalize();
+        moveDirection = villain.direction;
+      }
+      
+      const moveSpeed = villain.speed * delta;
+      const newX = villain.position.x + moveDirection.x * moveSpeed;
+      const newZ = villain.position.z + moveDirection.z * moveSpeed;
+      
+      // Update last position before moving
       villain.lastPosition.copy(villain.position);
       
-      // Try to move toward player
       if (!checkWallCollision(newX, newZ)) {
         villain.position.x = newX;
         villain.position.z = newZ;
-      } else if (villain.stuckTimer > 1.0) {
-        // If stuck for over 1 second, try moving perpendicular to wall
-        const perpX = villain.position.x - villain.direction.z * moveSpeed * 2;
-        const perpZ = villain.position.z + villain.direction.x * moveSpeed * 2;
-        if (!checkWallCollision(perpX, perpZ)) {
-          villain.position.x = perpX;
-          villain.position.z = perpZ;
-          villain.stuckTimer = 0; // Reset after successful sidestep
-        }
       }
       
       // Walking animation (alternate between walk1 and walk2)
