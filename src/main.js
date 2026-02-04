@@ -496,6 +496,14 @@ function updateZombies(delta) {
         document.getElementById('health').textContent = Math.round(player.health);
         zombie.lastDamageTime = Date.now();
         
+        // Play zombie attack sound
+        const zombieAttackSound = document.getElementById('zombie-attack-sound');
+        if (zombieAttackSound) {
+          zombieAttackSound.currentTime = 0;
+          zombieAttackSound.volume = 0.5;
+          zombieAttackSound.play().catch(e => console.log('Zombie attack sound failed:', e));
+        }
+        
         // Visual feedback
         const damageFlash = document.getElementById('damage-flash');
         if (damageFlash) {
