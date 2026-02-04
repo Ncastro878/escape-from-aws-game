@@ -781,12 +781,22 @@ function updateVillains(delta) {
         player.health -= 15; // Heavy punch!
         document.getElementById('health').textContent = Math.round(player.health);
         
-        // Play punch sound effect
-        const punchSound = document.getElementById('zombie-punch-sound');
-        if (punchSound) {
-          punchSound.currentTime = 0; // Reset to start
-          punchSound.volume = 0.6; // Set volume
-          punchSound.play().catch(e => console.log('Punch sound failed:', e));
+        // Play punch sound effect (40% chance to play voice instead)
+        const playVoice = Math.random() < 0.4;
+        if (playVoice) {
+          const villainVoiceSound = document.getElementById('villain-voice-sound');
+          if (villainVoiceSound) {
+            villainVoiceSound.currentTime = 0;
+            villainVoiceSound.volume = 0.7;
+            villainVoiceSound.play().catch(e => console.log('Villain voice sound failed:', e));
+          }
+        } else {
+          const punchSound = document.getElementById('zombie-punch-sound');
+          if (punchSound) {
+            punchSound.currentTime = 0;
+            punchSound.volume = 0.6;
+            punchSound.play().catch(e => console.log('Punch sound failed:', e));
+          }
         }
         
         // Visual feedback
