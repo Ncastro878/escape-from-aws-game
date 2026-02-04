@@ -661,6 +661,14 @@ function updateHealthPacks(delta) {
         player.health = 100;
         document.getElementById('health').textContent = '100';
         
+        // Play health pack pickup sound
+        const healthPackSound = document.getElementById('health-pack-sound');
+        if (healthPackSound) {
+          healthPackSound.currentTime = 0;
+          healthPackSound.volume = 0.6;
+          healthPackSound.play().catch(e => console.log('Health pack sound failed:', e));
+        }
+        
         // Green flash effect!
         const healFlash = document.getElementById('heal-flash');
         if (healFlash) {
