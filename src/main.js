@@ -17,12 +17,14 @@ camera.position.set(0, 2, 0);
 let cameraYaw = 0;
 let cameraPitch = 0;
 
-// Renderer
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// Renderer - optimized for performance
+const renderer = new THREE.WebGLRenderer({ 
+  antialias: false,  // Disabled for better performance
+  powerPreference: 'high-performance'
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Reduced from 2 for performance
+renderer.shadowMap.enabled = false; // Disabled for better performance
 document.body.appendChild(renderer.domElement);
 
 // Pointer lock controls (desktop only)
@@ -465,8 +467,8 @@ function hasLineOfSight(zombiePos, playerPos) {
   return true;
 }
 
-// Spawn zombies around the expanded server room
-for (let i = 0; i < 25; i++) {
+// Spawn zombies around the expanded server room (reduced for performance)
+for (let i = 0; i < 18; i++) {
   const x = (Math.random() - 0.5) * 80;  // Much larger spawn area for all the new hallways
   const z = (Math.random() - 0.5) * 80;
   const zombie = createZombie(x, z);
@@ -730,8 +732,8 @@ function createVillain(x, z) {
   return sprite;
 }
 
-// Spawn villains (fewer than zombies, more dangerous)
-for (let i = 0; i < 8; i++) {
+// Spawn villains (fewer than zombies, more dangerous) - reduced for performance
+for (let i = 0; i < 6; i++) {
   const x = (Math.random() - 0.5) * 80;
   const z = (Math.random() - 0.5) * 80;
   const villain = createVillain(x, z);
@@ -923,15 +925,15 @@ const bulletMaterial = new THREE.MeshBasicMaterial({
   opacity: 0
 });
 
-// Blood particles
+// Blood particles - optimized with shared material
 const bloodParticles = [];
-const bloodGeometry = new THREE.SphereGeometry(0.04, 4, 4); // Even smaller droplets
+const bloodGeometry = new THREE.SphereGeometry(0.04, 3, 3); // Simpler geometry for performance
 
 function createBloodSplatter(position) {
-  // Create 8-12 blood particles
-  const numParticles = 8 + Math.floor(Math.random() * 5);
+  // Create fewer particles (5-8 instead of 8-12) for better performance
+  const numParticles = 5 + Math.floor(Math.random() * 4);
   for (let i = 0; i < numParticles; i++) {
-    // Create unique material for each particle so we can fade individually
+    // Share material but clone it for individual opacity
     const particleMaterial = new THREE.MeshBasicMaterial({ 
       color: 0xff0000,
       transparent: true,
