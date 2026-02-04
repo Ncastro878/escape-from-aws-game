@@ -481,14 +481,6 @@ function updateZombies(delta) {
     
     // Remove dead zombies
     if (zombie.health <= 0) {
-      // Play zombie death sound
-      const zombieDeathSound = document.getElementById('zombie-death-sound');
-      if (zombieDeathSound) {
-        zombieDeathSound.currentTime = 0;
-        zombieDeathSound.volume = 0.5;
-        zombieDeathSound.play().catch(e => console.log('Zombie death sound failed:', e));
-      }
-      
       scene.remove(zombie);
       zombies.splice(i, 1);
       continue;
