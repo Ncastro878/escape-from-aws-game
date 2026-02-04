@@ -834,7 +834,6 @@ function updateVillains(delta) {
           villain.position.z = newZ;
         }
       }
-    }
       
       // Walking animation (alternate between walk1 and walk2)
       villain.walkAnimationTime += delta * 4;
