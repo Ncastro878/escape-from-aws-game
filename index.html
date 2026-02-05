@@ -310,6 +310,64 @@
         bottom: -80px;
       }
     }
+    
+    /* NPC Dialog Box */
+    #npc-dialog-box {
+      display: none;
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 900px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 4px solid rgba(255, 255, 255, 0.8);
+      border-radius: 10px;
+      padding: 30px;
+      z-index: 250;
+      color: white;
+      font-family: Arial, sans-serif;
+      cursor: pointer;
+    }
+    #npc-dialog-box.active {
+      display: block;
+    }
+    #npc-dialog-box:hover {
+      border-color: rgba(255, 255, 255, 1);
+    }
+    #npc-portrait {
+      width: 100px;
+      height: 100px;
+      float: left;
+      margin-right: 20px;
+      border: 2px solid white;
+      border-radius: 5px;
+      background: #333;
+    }
+    #npc-name {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #ffaa00;
+    }
+    #npc-text {
+      font-size: 22px;
+      line-height: 1.6;
+      clear: both;
+      margin-top: 15px;
+    }
+    #npc-continue {
+      position: absolute;
+      bottom: 10px;
+      right: 20px;
+      font-size: 14px;
+      color: #aaa;
+      animation: blink 1s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
   </style>
 </head>
 <body>
@@ -400,6 +458,14 @@
   <div id="hud">
     <div>Health: <span id="health">100</span></div>
     <div>Ammo: <span id="ammo">30</span></div>
+  </div>
+  
+  <!-- NPC Dialog System -->
+  <div id="npc-dialog-box">
+    <img id="npc-portrait" src="" alt="NPC">
+    <div id="npc-name"></div>
+    <div id="npc-text"></div>
+    <div id="npc-continue">Click/Tap to continue...</div>
   </div>
   
   <!-- Mobile Controls -->
@@ -497,6 +563,61 @@
       if (blocker && instructions) {
         instructions.click();
       }
+    });
+
+    // Stop music when tab/window loses focus (mobile browsers)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        // Page is hidden (user switched tab/app) - stop completely
+        menuMusic.pause();
+        menuMusic.currentTime = 0;
+        gameplayMusic.pause();
+        gameplayMusic.currentTime = 0;
+      } else {
+        // Page is visible again
+        if (!isMuted) {
+          // Resume whichever music should be playing
+          if (startMenu.style.display === 'flex') {
+            menuMusic.play().catch(e => console.log('Resume menu music failed:', e));
+          } else if (entryScreen.style.display === 'none' && startMenu.style.display === 'none') {
+            gameplayMusic.play().catch(e => console.log('Resume gameplay music failed:', e));
+          }
+        }
+      }
+    });
+
+    // Also handle blur/focus events for additional browser support
+    window.addEventListener('blur', () => {
+      menuMusic.pause();
+      menuMusic.currentTime = 0;
+      gameplayMusic.pause();
+      gameplayMusic.currentTime = 0;
+    });
+
+    window.addEventListener('focus', () => {
+      if (!isMuted && !document.hidden) {
+        if (startMenu.style.display === 'flex') {
+          menuMusic.play().catch(e => console.log('Resume menu music failed:', e));
+        } else if (entryScreen.style.display === 'none' && startMenu.style.display === 'none') {
+          gameplayMusic.play().catch(e => console.log('Resume gameplay music failed:', e));
+        }
+      }
+    });
+
+    // Stop music when navigating away or closing tab
+    window.addEventListener('beforeunload', () => {
+      menuMusic.pause();
+      menuMusic.currentTime = 0;
+      gameplayMusic.pause();
+      gameplayMusic.currentTime = 0;
+    });
+
+    // Also stop on pagehide (for mobile browsers)
+    window.addEventListener('pagehide', () => {
+      menuMusic.pause();
+      menuMusic.currentTime = 0;
+      gameplayMusic.pause();
+      gameplayMusic.currentTime = 0;
     });
   </script>
   

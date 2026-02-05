@@ -184,10 +184,26 @@ const serverRackTexture = textureLoader.load('/models/server-rack.png',
   (err) => console.error('❌ Error loading server rack texture:', err)
 );
 
-const cubicleWallMaterial = new THREE.MeshStandardMaterial({ 
+const awsPanelTexture = textureLoader.load('/models/aws-panel.png', 
+  (texture) => {
+    console.log('✅ AWS panel texture loaded!');
+  },
+  undefined,
+  (err) => console.error('❌ Error loading AWS panel texture:', err)
+);
+
+const serverRackMaterial = new THREE.MeshStandardMaterial({ 
   map: serverRackTexture,
   roughness: 0.7,
   metalness: 0.3  // Add some metallic sheen for servers
+});
+
+const awsPanelMaterial = new THREE.MeshStandardMaterial({ 
+  map: awsPanelTexture,
+  roughness: 0.7,
+  metalness: 0.3,
+  emissive: 0x00aaaa,
+  emissiveIntensity: 0.2  // Slight glow for AWS logo
 });
 
 // Size of each individual cubicle panel
@@ -201,9 +217,13 @@ function createWall(startX, startZ, length, rotation = 0) {
   const isVertical = rotation !== 0;
   
   for (let i = 0; i < numPanels; i++) {
+    // 1 in 30 chance for AWS panel
+    const useAWSPanel = Math.random() < (1 / 30);
+    const material = useAWSPanel ? awsPanelMaterial : serverRackMaterial;
+    
     const panel = new THREE.Mesh(
       new THREE.BoxGeometry(panelWidth, wallHeight, wallDepth),
-      cubicleWallMaterial
+      material
     );
     
     if (isVertical) {
@@ -700,6 +720,156 @@ function updateHealthPacks(delta) {
   }
 }
 
+// ========== NPC SYSTEM ==========
+const npcs = [];
+let currentNPC = null;
+let dialogActive = false;
+let dialogIndex = 0;
+
+const npcTextureLoader = new THREE.TextureLoader();
+const npcHoodieTexture = npcTextureLoader.load('/npc-hoodie-guy.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const npcPepeTexture = npcTextureLoader.load('/npc-pepe.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+
+function createNPC(x, z, name, dialogLines, texture = npcHoodieTexture) {
+  const spriteMaterial = new THREE.SpriteMaterial({ 
+    map: texture,
+    transparent: true,
+    alphaTest: 0.5,
+    depthWrite: false
+  });
+  
+  const sprite = new THREE.Sprite(spriteMaterial);
+  sprite.scale.set(2.5, 3.5, 1);
+  sprite.position.set(x, 1.75, z);
+  
+  sprite.npcName = name;
+  sprite.dialogLines = dialogLines;
+  sprite.canInteract = false;
+  sprite.npcTexture = texture; // Store texture for portrait
+  
+  return sprite;
+}
+
+// Spawn the hoodie guy NPC - spawn in open area away from walls
+const hoodieGuy = createNPC(8, 0, "Wojak", [
+  "Hey... you made it.",
+  "This place... it's not what it seems.",
+  "The servers hold secrets. Dark ones.",
+  "Stay sharp out there."
+]);
+npcs.push(hoodieGuy);
+scene.add(hoodieGuy);
+
+// Spawn Pepe NPC
+const pepe = createNPC(-8, 0, "Pepe", [
+  "Feels good man...",
+  "These zombies are getting out of hand.",
+  "I used to work here... before the incident.",
+  "Stay frosty, anon."
+], npcPepeTexture);
+npcs.push(pepe);
+scene.add(pepe);
+
+function updateNPCs() {
+  for (const npc of npcs) {
+    // Always face camera (billboard)
+    npc.lookAt(camera.position);
+    
+    // Check distance to player
+    const distToPlayer = npc.position.distanceTo(camera.position);
+    
+    // Auto-start dialog when player gets close
+    if (distToPlayer < 3 && !dialogActive && !npc.hasSpoken) {
+      npc.canInteract = true;
+      currentNPC = npc;
+      startDialog(npc);
+      npc.hasSpoken = true; // Mark as spoken so dialog doesn't loop
+    }
+  }
+}
+
+function startDialog(npc) {
+  dialogActive = true;
+  dialogIndex = 0;
+  currentNPC = npc;
+  showDialogLine();
+}
+
+function showDialogLine() {
+  const dialogBox = document.getElementById('npc-dialog-box');
+  const npcPortrait = document.getElementById('npc-portrait');
+  const npcName = document.getElementById('npc-name');
+  const npcText = document.getElementById('npc-text');
+  
+  if (dialogBox && currentNPC) {
+    dialogBox.classList.add('active');
+    // Set portrait based on NPC name
+    if (currentNPC.npcName === 'Pepe') {
+      npcPortrait.src = '/npc-pepe.png';
+    } else {
+      npcPortrait.src = '/npc-hoodie-guy.png';
+    }
+    npcName.textContent = currentNPC.npcName;
+    npcText.textContent = currentNPC.dialogLines[dialogIndex];
+  }
+}
+
+function advanceDialog() {
+  if (!currentNPC) return;
+  
+  dialogIndex++;
+  if (dialogIndex >= currentNPC.dialogLines.length) {
+    endDialog();
+  } else {
+    showDialogLine();
+  }
+}
+
+function endDialog() {
+  dialogActive = false;
+  dialogIndex = 0;
+  currentNPC = null;
+  
+  const dialogBox = document.getElementById('npc-dialog-box');
+  if (dialogBox) {
+    dialogBox.classList.remove('active');
+  }
+}
+
+// Handle E key for interaction
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyE') {
+    if (dialogActive) {
+      advanceDialog();
+    }
+  }
+});
+
+// Handle click/tap on dialog box to advance
+document.addEventListener('click', (e) => {
+  const dialogBox = document.getElementById('npc-dialog-box');
+  if (dialogActive && dialogBox && dialogBox.contains(e.target)) {
+    e.stopPropagation(); // Prevent shooting
+    advanceDialog();
+  }
+});
+
+// Handle mobile tap on dialog box
+document.addEventListener('touchstart', (e) => {
+  const dialogBox = document.getElementById('npc-dialog-box');
+  if (dialogActive && dialogBox && dialogBox.contains(e.target)) {
+    e.preventDefault();
+    e.stopPropagation();
+    advanceDialog();
+  }
+});
+
 // ========== BALD VILLAINS ==========
 const villains = [];
 const villainWalk1Texture = textureLoader.load('/models/bald-villain-walk1.png');
@@ -986,6 +1156,9 @@ const fireballMaterial = new THREE.MeshBasicMaterial({
 });
 
 function shoot() {
+  // Don't shoot when dialog is active
+  if (dialogActive) return;
+  
   const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
   bullet.position.copy(camera.position);
   
@@ -1022,7 +1195,7 @@ function shoot() {
 }
 
 document.addEventListener('click', () => {
-  if (!isMobile && controls.isLocked) shoot();
+  if (!isMobile && controls.isLocked && !dialogActive) shoot();
 });
 
 function updateBullets(delta) {
@@ -1197,7 +1370,7 @@ const shootBtn = document.getElementById('shoot-btn');
 if (isMobile && shootBtn) {
   shootBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    if (gameStarted) shoot();
+    if (gameStarted && !dialogActive) shoot();
   });
 }
 
@@ -1336,13 +1509,19 @@ function animate() {
   const isPlaying = isMobile ? gameStarted : controls.isLocked;
   
   if (isPlaying) {
-    updatePlayer(delta);
-    updateBullets(delta);
-    updateFireballs(delta);
-    updateZombies(delta);
-    updateVillains(delta);
-    updateHealthPacks(delta);
-    updateBloodParticles(delta);
+    // Always update NPCs (even when paused, for billboard effect)
+    updateNPCs();
+    
+    // Pause game when dialog is active
+    if (!dialogActive) {
+      updatePlayer(delta);
+      updateBullets(delta);
+      updateFireballs(delta);
+      updateZombies(delta);
+      updateVillains(delta);
+      updateHealthPacks(delta);
+      updateBloodParticles(delta);
+    }
     
     // Low health warning
     const lowHealthWarning = document.getElementById('low-health-warning');
