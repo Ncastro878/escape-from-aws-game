@@ -1034,6 +1034,201 @@ function updateVillains(delta) {
   }
 }
 
+// ========== FLYING BOSS (ZUCKERBERG) ==========
+const flyingBosses = [];
+const flyingBossProjectiles = [];
+
+const zuckIdle1Texture = textureLoader.load('/models/zuck-idle1.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const zuckIdle2Texture = textureLoader.load('/models/zuck-idle2.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const zuckShootTexture = textureLoader.load('/models/zuck-shoot.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+
+// Create flying boss
+function createFlyingBoss(x, z) {
+  const spriteMaterial = new THREE.SpriteMaterial({ 
+    map: zuckIdle1Texture,
+    transparent: true,
+    alphaTest: 0.1,
+    depthWrite: false
+  });
+  
+  const sprite = new THREE.Sprite(spriteMaterial);
+  sprite.scale.set(4, 4, 1);  // Larger, intimidating
+  sprite.position.set(x, 1.8, z);  // Float in the air
+  
+  // Boss AI properties
+  sprite.speed = 5;
+  sprite.health = 150; // Boss-tier health
+  sprite.attackTimer = 0;
+  sprite.attackCooldown = 2.0; // Shoot every 2 seconds
+  sprite.isShooting = false;
+  sprite.shootDuration = 0;
+  sprite.hoverTime = Math.random() * Math.PI * 2; // For bobbing animation
+  sprite.animationFrame = 0;
+  sprite.animationTime = Math.random() * Math.PI * 2;
+  
+  return sprite;
+}
+
+// Spawn a few flying bosses - reduced for performance
+for (let i = 0; i < 3; i++) {
+  const x = (Math.random() - 0.5) * 60;
+  const z = (Math.random() - 0.5) * 60;
+  const boss = createFlyingBoss(x, z);
+  flyingBosses.push(boss);
+  scene.add(boss);
+}
+
+// Update flying bosses
+function updateFlyingBosses(delta) {
+  for (let i = flyingBosses.length - 1; i >= 0; i--) {
+    const boss = flyingBosses[i];
+    
+    // Remove dead bosses
+    if (boss.health <= 0) {
+      const deathSound = document.getElementById('villain-death-sound');
+      if (deathSound) {
+        deathSound.currentTime = 0;
+        deathSound.volume = 0.7;
+        deathSound.play().catch(e => console.log('Boss death failed:', e));
+      }
+      scene.remove(boss);
+      flyingBosses.splice(i, 1);
+      continue;
+    }
+    
+    const distToPlayer = boss.position.distanceTo(camera.position);
+    
+    // Floating animation (bob up and down)
+    boss.hoverTime += delta * 2;
+    boss.position.y = 1.8 + Math.sin(boss.hoverTime) * 0.3;
+    
+    // Shoot at player
+    boss.attackTimer += delta;
+    if (distToPlayer < 40 && boss.attackTimer >= boss.attackCooldown) {
+      // Shoot!
+      boss.isShooting = true;
+      boss.shootDuration = 0;
+      boss.material.map = zuckShootTexture;
+      boss.material.needsUpdate = true;
+      
+      // Create projectile
+      const projectile = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 8, 8),
+        new THREE.MeshBasicMaterial({ 
+          color: 0xff0000,
+          emissive: 0xff0000,
+          emissiveIntensity: 1
+        })
+      );
+      projectile.position.copy(boss.position);
+      
+      // Direction toward player
+      const direction = new THREE.Vector3();
+      direction.subVectors(camera.position, boss.position);
+      direction.normalize();
+      projectile.velocity = direction.multiplyScalar(20); // Fast projectile
+      projectile.lifetime = 5;
+      
+      flyingBossProjectiles.push(projectile);
+      scene.add(projectile);
+      
+      // Play sound
+      const gunshotSound = document.getElementById('gunshot-sound');
+      if (gunshotSound) {
+        gunshotSound.currentTime = 0;
+        gunshotSound.volume = 0.5;
+        gunshotSound.play().catch(e => console.log('Boss shot failed:', e));
+      }
+      
+      boss.attackTimer = 0;
+    }
+    
+    // Handle shoot animation
+    if (boss.isShooting) {
+      boss.shootDuration += delta;
+      if (boss.shootDuration >= 0.3) {
+        boss.isShooting = false;
+        boss.shootDuration = 0;
+      }
+    }
+    
+    // Idle animation when not shooting
+    if (!boss.isShooting) {
+      boss.animationTime += delta * 1.5;
+      const frameTime = 1.0;  // Slower alternation
+      const currentFrame = Math.floor(boss.animationTime / frameTime) % 2;
+      
+      if (currentFrame !== boss.animationFrame) {
+        boss.animationFrame = currentFrame;
+        boss.material.map = currentFrame === 0 ? zuckIdle1Texture : zuckIdle2Texture;
+        boss.material.needsUpdate = true;
+      }
+    }
+    
+    // Fly toward player aggressively
+    const direction = new THREE.Vector3();
+    direction.subVectors(camera.position, boss.position);
+    direction.y = 0;
+    direction.normalize();
+    
+    const minDistance = 4; // Fly much closer
+    if (distToPlayer > minDistance) {
+      const moveSpeed = boss.speed * delta;
+      const newX = boss.position.x + direction.x * moveSpeed;
+      const newZ = boss.position.z + direction.z * moveSpeed;
+      
+      if (!checkWallCollision(newX, newZ)) {
+        boss.position.x = newX;
+        boss.position.z = newZ;
+      }
+    }
+    
+    // Always face camera
+    boss.lookAt(camera.position.x, boss.position.y, camera.position.z);
+  }
+}
+
+// Update boss projectiles
+function updateFlyingBossProjectiles(delta) {
+  for (let i = flyingBossProjectiles.length - 1; i >= 0; i--) {
+    const projectile = flyingBossProjectiles[i];
+    projectile.position.add(projectile.velocity.clone().multiplyScalar(delta));
+    projectile.lifetime -= delta;
+    
+    // Remove if expired or hit wall
+    if (projectile.lifetime <= 0 || checkWallCollision(projectile.position.x, projectile.position.z)) {
+      scene.remove(projectile);
+      flyingBossProjectiles.splice(i, 1);
+      continue;
+    }
+    
+    // Check if hit player
+    if (projectile.position.distanceTo(camera.position) < 1.5) {
+      player.health -= 20; // Heavy damage
+      document.getElementById('health').textContent = Math.round(player.health);
+      
+      // Visual feedback
+      const damageFlash = document.getElementById('damage-flash');
+      if (damageFlash) {
+        damageFlash.classList.add('active');
+        setTimeout(() => damageFlash.classList.remove('active'), 150);
+      }
+      
+      scene.remove(projectile);
+      flyingBossProjectiles.splice(i, 1);
+    }
+  }
+}
+
 // ========== LIGHTING (Doom-style overhead) ==========
 // Add point lights along the corridors
 const lightPositions = [
@@ -1253,6 +1448,24 @@ function updateBullets(delta) {
         // Flash red on hit
         villain.material.color.setHex(0xff0000);
         setTimeout(() => villain.material.color.setHex(0xffffff), 100);
+        
+        scene.remove(bullet);
+        bullets.splice(i, 1);
+        break;
+      }
+    }
+    
+    // Check if bullet hits flying boss
+    for (const boss of flyingBosses) {
+      if (bullet.position.distanceTo(boss.position) < 2) {
+        boss.health -= 10;
+        
+        // Blood splatter effect
+        createBloodSplatter(boss.position.clone());
+        
+        // Flash red on hit
+        boss.material.color.setHex(0xff0000);
+        setTimeout(() => boss.material.color.setHex(0xffffff), 100);
         
         scene.remove(bullet);
         bullets.splice(i, 1);
@@ -1529,6 +1742,8 @@ function animate() {
       updateFireballs(delta);
       updateZombies(delta);
       updateVillains(delta);
+      updateFlyingBosses(delta);
+      updateFlyingBossProjectiles(delta);
       updateHealthPacks(delta);
       updateBloodParticles(delta);
     }
