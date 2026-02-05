@@ -725,6 +725,8 @@ const npcs = [];
 let currentNPC = null;
 let dialogActive = false;
 let dialogIndex = 0;
+let lastDialogAdvanceTime = 0;
+const dialogAdvanceCooldown = 500; // 500ms cooldown between advances
 
 const npcTextureLoader = new THREE.TextureLoader();
 const npcHoodieTexture = npcTextureLoader.load('/npc-hoodie-guy.png', (texture) => {
@@ -798,6 +800,7 @@ function startDialog(npc) {
   dialogActive = true;
   dialogIndex = 0;
   currentNPC = npc;
+  lastDialogAdvanceTime = 0; // Reset cooldown for new dialog
   showDialogLine();
 }
 
@@ -822,6 +825,13 @@ function showDialogLine() {
 
 function advanceDialog() {
   if (!currentNPC) return;
+  
+  // Check cooldown to prevent rapid clicking
+  const now = Date.now();
+  if (now - lastDialogAdvanceTime < dialogAdvanceCooldown) {
+    return; // Too soon, ignore
+  }
+  lastDialogAdvanceTime = now;
   
   dialogIndex++;
   if (dialogIndex >= currentNPC.dialogLines.length) {
