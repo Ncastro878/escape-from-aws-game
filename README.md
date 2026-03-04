@@ -6,6 +6,21 @@ A retro-style first-person shooter built with Three.js. Fight zombies, dodge a r
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat&logo=javascript&logoColor=black)
 
+<p align="center">
+  <img src="awsdoom.jpg" alt="Gameplay Screenshot" width="600">
+</p>
+
+## 👾 Meet the Bosses
+
+<p align="center">
+  <img src="boss-cybertruck.png" alt="Cybertruck Boss" width="300">
+  <img src="boss-gates.png" alt="Gates Boss" width="300">
+</p>
+
+<p align="center">
+  <img src="boss-fight-action.png" alt="Boss Fight Action" width="600">
+</p>
+
 ## 🕹️ Gameplay
 
 - **Doom-style FPS** with retro aesthetics

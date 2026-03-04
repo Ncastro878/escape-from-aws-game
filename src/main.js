@@ -1229,6 +1229,460 @@ function updateFlyingBossProjectiles(delta) {
   }
 }
 
+// ========== EVIL CAR VILLAIN ==========
+const evilCars = [];
+const carDiagonalTexture = textureLoader.load('/models/car-diagonal.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const carFrontTexture = textureLoader.load('/models/car-front.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const carFrontSmoke1Texture = textureLoader.load('/models/car-front-smoke1.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const carFrontSmoke2Texture = textureLoader.load('/models/car-front-smoke2.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const carSideTexture = textureLoader.load('/models/car-side.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const carSideSmokeTexture = textureLoader.load('/models/car-side-smoke.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+
+// Create evil car
+function createEvilCar(x, z) {
+  const spriteMaterial = new THREE.SpriteMaterial({ 
+    map: carSideTexture,
+    transparent: true,
+    alphaTest: 0.1,
+    depthWrite: false
+  });
+  
+  const sprite = new THREE.Sprite(spriteMaterial);
+  sprite.scale.set(3.5, 2.5, 1);  // Wide car
+  sprite.position.set(x, 1.25, z);  // Ground level
+  
+  // Car AI properties
+  sprite.speed = 6; // Fast!
+  sprite.health = 80;
+  sprite.state = 'patrol'; // 'patrol' or 'charge'
+  sprite.patrolDirection = new THREE.Vector3(
+    (Math.random() - 0.5) * 2,
+    0,
+    (Math.random() - 0.5) * 2
+  ).normalize();
+  sprite.patrolTimer = 0;
+  sprite.animationFrame = 0;
+  sprite.animationTime = Math.random() * Math.PI * 2;
+  sprite.ramDamageTimer = 0;
+  
+  return sprite;
+}
+
+// Spawn evil cars - reduced for performance
+for (let i = 0; i < 2; i++) {
+  const x = (Math.random() - 0.5) * 60;
+  const z = (Math.random() - 0.5) * 60;
+  const car = createEvilCar(x, z);
+  evilCars.push(car);
+  scene.add(car);
+}
+
+// Update evil cars
+function updateEvilCars(delta) {
+  for (let i = evilCars.length - 1; i >= 0; i--) {
+    const car = evilCars[i];
+    
+    // Remove dead cars
+    if (car.health <= 0) {
+      const deathSound = document.getElementById('villain-death-sound');
+      if (deathSound) {
+        deathSound.currentTime = 0;
+        deathSound.volume = 0.6;
+        deathSound.play().catch(e => console.log('Car death failed:', e));
+      }
+      scene.remove(car);
+      evilCars.splice(i, 1);
+      continue;
+    }
+    
+    const distToPlayer = car.position.distanceTo(camera.position);
+    
+    // State machine: patrol vs charge
+    if (distToPlayer > 20) {
+      // FAR AWAY - PATROL MODE (sideways driving)
+      car.state = 'patrol';
+      
+      // Change patrol direction occasionally
+      car.patrolTimer += delta;
+      if (car.patrolTimer > 3) {
+        car.patrolDirection.set(
+          (Math.random() - 0.5) * 2,
+          0,
+          (Math.random() - 0.5) * 2
+        ).normalize();
+        car.patrolTimer = 0;
+      }
+      
+      // Move in patrol direction
+      const moveSpeed = car.speed * 0.7 * delta; // Slower when patrolling
+      const newX = car.position.x + car.patrolDirection.x * moveSpeed;
+      const newZ = car.position.z + car.patrolDirection.z * moveSpeed;
+      
+      if (!checkWallCollision(newX, newZ)) {
+        car.position.x = newX;
+        car.position.z = newZ;
+      } else {
+        // Bounce off walls
+        car.patrolDirection.multiplyScalar(-1);
+        car.patrolTimer = 0;
+      }
+      
+      // Use side view sprites when patrolling
+      car.animationTime += delta * 2;
+      const frameTime = 0.8;
+      const currentFrame = Math.floor(car.animationTime / frameTime) % 2;
+      
+      if (currentFrame !== car.animationFrame) {
+        car.animationFrame = currentFrame;
+        car.material.map = currentFrame === 0 ? carSideTexture : carDiagonalTexture;
+        car.material.needsUpdate = true;
+      }
+      
+    } else {
+      // CLOSE RANGE - CHARGE MODE (drive toward player with smoke!)
+      car.state = 'charge';
+      
+      // Charge straight at player
+      const direction = new THREE.Vector3();
+      direction.subVectors(camera.position, car.position);
+      direction.y = 0;
+      direction.normalize();
+      
+      const minDistance = 2; // Ram distance
+      if (distToPlayer > minDistance) {
+        const moveSpeed = car.speed * delta; // Full speed charge!
+        const newX = car.position.x + direction.x * moveSpeed;
+        const newZ = car.position.z + direction.z * moveSpeed;
+        
+        if (!checkWallCollision(newX, newZ)) {
+          car.position.x = newX;
+          car.position.z = newZ;
+        }
+      }
+      
+      // Ram damage when really close
+      if (distToPlayer < 3) {
+        car.ramDamageTimer += delta;
+        if (car.ramDamageTimer >= 1.0) {
+          player.health -= 25; // Heavy ram damage!
+          document.getElementById('health').textContent = Math.round(player.health);
+          
+          // Visual feedback
+          const damageFlash = document.getElementById('damage-flash');
+          if (damageFlash) {
+            damageFlash.classList.add('active');
+            setTimeout(() => damageFlash.classList.remove('active'), 150);
+          }
+          
+          // Play sound
+          const zombiePunchSound = document.getElementById('zombie-punch-sound');
+          if (zombiePunchSound) {
+            zombiePunchSound.currentTime = 0;
+            zombiePunchSound.volume = 0.7;
+            zombiePunchSound.play().catch(e => console.log('Ram sound failed:', e));
+          }
+          
+          car.ramDamageTimer = 0;
+        }
+      }
+      
+      // Use front view with SMOKE animation when charging
+      car.animationTime += delta * 3;
+      const frameTime = 0.4;
+      const currentFrame = Math.floor(car.animationTime / frameTime) % 3;
+      
+      if (currentFrame !== car.animationFrame) {
+        car.animationFrame = currentFrame;
+        if (currentFrame === 0) {
+          car.material.map = carFrontTexture;
+        } else if (currentFrame === 1) {
+          car.material.map = carFrontSmoke1Texture;
+        } else {
+          car.material.map = carFrontSmoke2Texture;
+        }
+        car.material.needsUpdate = true;
+      }
+    }
+    
+    // Always face camera (billboard)
+    car.lookAt(camera.position.x, car.position.y, camera.position.z);
+  }
+}
+
+// ========== CYBERTRUCK VILLAIN (Elon Musk Hybrid) ==========
+const cybertrucks = [];
+const cybertruckLeftTexture = textureLoader.load('/cybertruck-left.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const cybertruckRightTexture = textureLoader.load('/cybertruck-right.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const cybertruckAngleLeftTexture = textureLoader.load('/cybertruck-angle-left.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const cybertruckAngleRightTexture = textureLoader.load('/cybertruck-angle-right.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const cybertruckFrontTexture = textureLoader.load('/cybertruck-front.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const cybertruckFrontAngleTexture = textureLoader.load('/cybertruck-front-angle.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+const cybertruckFrontIntenseTexture = textureLoader.load('/cybertruck-front-intense.png', (texture) => {
+  texture.format = THREE.RGBAFormat;
+  texture.needsUpdate = true;
+});
+
+// Create Cybertruck villain
+function createCybertruck(x, z) {
+  const spriteMaterial = new THREE.SpriteMaterial({ 
+    map: cybertruckLeftTexture,
+    transparent: true,
+    alphaTest: 0.1,
+    depthWrite: false
+  });
+  
+  const sprite = new THREE.Sprite(spriteMaterial);
+  sprite.scale.set(4, 3.5, 1);  // Larger and more imposing than regular car
+  sprite.position.set(x, 1.75, z);
+  
+  // Cybertruck AI properties
+  sprite.speed = 12; // Faster than regular car!
+  sprite.state = 'patrol';
+  sprite.patrolDirection = new THREE.Vector3(
+    (Math.random() - 0.5) * 2,
+    0,
+    (Math.random() - 0.5) * 2
+  ).normalize();
+  sprite.patrolTimer = 0;
+  sprite.animationTime = 0;
+  sprite.health = 80; // More health than regular enemies
+  sprite.ramDamageTimer = 0;
+  sprite.currentTexture = null; // Track which texture is active
+  sprite.moveDirection = new THREE.Vector3(); // Track movement direction for sprite selection
+  
+  return sprite;
+}
+
+// Spawn 2 Cybertrucks
+for (let i = 0; i < 2; i++) {
+  const x = (Math.random() - 0.5) * 70;
+  const z = (Math.random() - 0.5) * 70;
+  const truck = createCybertruck(x, z);
+  cybertrucks.push(truck);
+  scene.add(truck);
+}
+
+// Update Cybertrucks with directional sprite switching
+function updateCybertrucks(delta) {
+  for (let i = cybertrucks.length - 1; i >= 0; i--) {
+    const truck = cybertrucks[i];
+    
+    // Remove dead trucks
+    if (truck.health <= 0) {
+      const deathSound = document.getElementById('villain-death-sound');
+      if (deathSound) {
+        deathSound.currentTime = 0;
+        deathSound.volume = 0.7;
+        deathSound.play().catch(e => console.log('Cybertruck death failed:', e));
+      }
+      scene.remove(truck);
+      cybertrucks.splice(i, 1);
+      continue;
+    }
+    
+    const distToPlayer = truck.position.distanceTo(camera.position);
+    
+    // State machine: patrol vs charge
+    if (distToPlayer > 25) {
+      // FAR AWAY - PATROL MODE
+      truck.state = 'patrol';
+      
+      // Change patrol direction occasionally
+      truck.patrolTimer += delta;
+      if (truck.patrolTimer > 2.5) {
+        truck.patrolDirection.set(
+          (Math.random() - 0.5) * 2,
+          0,
+          (Math.random() - 0.5) * 2
+        ).normalize();
+        truck.patrolTimer = 0;
+      }
+      
+      // Move in patrol direction
+      const moveSpeed = truck.speed * 0.6 * delta;
+      const newX = truck.position.x + truck.patrolDirection.x * moveSpeed;
+      const newZ = truck.position.z + truck.patrolDirection.z * moveSpeed;
+      
+      if (!checkWallCollision(newX, newZ)) {
+        truck.position.x = newX;
+        truck.position.z = newZ;
+      } else {
+        truck.patrolDirection.multiplyScalar(-1);
+        truck.patrolTimer = 0;
+      }
+      
+      // Store movement direction for sprite selection
+      truck.moveDirection.copy(truck.patrolDirection);
+      
+    } else {
+      // CLOSE RANGE - CHARGE MODE
+      const wasPatrolling = truck.state === 'patrol';
+      truck.state = 'charge';
+      
+      // Play charge sound twice when entering charge mode
+      if (wasPatrolling) {
+        const chargeSound = document.getElementById('cybertruck-charge-sound');
+        if (chargeSound) {
+          chargeSound.currentTime = 0;
+          chargeSound.volume = 0.7;
+          chargeSound.play().catch(e => console.log('Cybertruck charge sound failed:', e));
+          
+          // Play again after a short delay
+          setTimeout(() => {
+            chargeSound.currentTime = 0;
+            chargeSound.play().catch(e => console.log('Cybertruck charge sound 2 failed:', e));
+          }, 800);
+        }
+      }
+      
+      // Charge at player
+      const direction = new THREE.Vector3();
+      direction.subVectors(camera.position, truck.position);
+      direction.y = 0;
+      direction.normalize();
+      
+      const minDistance = 2.5;
+      if (distToPlayer > minDistance) {
+        const moveSpeed = truck.speed * delta;
+        const newX = truck.position.x + direction.x * moveSpeed;
+        const newZ = truck.position.z + direction.z * moveSpeed;
+        
+        if (!checkWallCollision(newX, newZ)) {
+          truck.position.x = newX;
+          truck.position.z = newZ;
+        }
+      }
+      
+      // Store movement direction for sprite selection
+      truck.moveDirection.copy(direction);
+      
+      // Heavy ram damage when close
+      if (distToPlayer < 4) {
+        truck.ramDamageTimer += delta;
+        if (truck.ramDamageTimer >= 0.8) {
+          player.health -= 30; // Cybertruck hits harder!
+          document.getElementById('health').textContent = Math.round(player.health);
+          
+          const damageFlash = document.getElementById('damage-flash');
+          if (damageFlash) {
+            damageFlash.classList.add('active');
+            setTimeout(() => damageFlash.classList.remove('active'), 150);
+          }
+          
+          const cybertruckRamSound = document.getElementById('cybertruck-ram-sound');
+          if (cybertruckRamSound) {
+            cybertruckRamSound.currentTime = 0;
+            cybertruckRamSound.volume = 0.8;
+            cybertruckRamSound.play().catch(e => console.log('Cybertruck ram sound failed:', e));
+          }
+          
+          truck.ramDamageTimer = 0;
+        }
+      }
+    }
+    
+    // DIRECTIONAL SPRITE SELECTION
+    // Calculate angle between truck movement and camera position
+    const toCamera = new THREE.Vector3();
+    toCamera.subVectors(camera.position, truck.position);
+    toCamera.y = 0;
+    toCamera.normalize();
+    
+    // Dot product to determine if moving toward or away from camera
+    const dotProduct = truck.moveDirection.dot(toCamera);
+    
+    // Cross product to determine left/right orientation
+    const crossProduct = truck.moveDirection.x * toCamera.z - truck.moveDirection.z * toCamera.x;
+    
+    let newTexture = null;
+    
+    if (truck.state === 'charge') {
+      // When charging, use front-facing sprites with intensity based on distance
+      if (distToPlayer < 10) {
+        // Very close - intense front view
+        newTexture = cybertruckFrontIntenseTexture;
+      } else if (dotProduct > 0.7) {
+        // Moving directly toward camera
+        newTexture = cybertruckFrontTexture;
+      } else {
+        // Slight angle
+        newTexture = cybertruckFrontAngleTexture;
+      }
+    } else {
+      // Patrol mode - use directional sprites based on movement
+      const angle = Math.abs(dotProduct);
+      
+      if (angle < 0.3) {
+        // Moving perpendicular to camera (left or right)
+        newTexture = crossProduct > 0 ? cybertruckRightTexture : cybertruckLeftTexture;
+      } else if (angle < 0.7) {
+        // Moving at an angle
+        if (dotProduct > 0) {
+          // Toward camera, angled
+          newTexture = crossProduct > 0 ? cybertruckAngleRightTexture : cybertruckAngleLeftTexture;
+        } else {
+          // Away from camera, use side views
+          newTexture = crossProduct > 0 ? cybertruckLeftTexture : cybertruckRightTexture;
+        }
+      } else {
+        // Moving directly toward or away from camera
+        if (dotProduct > 0) {
+          newTexture = cybertruckFrontAngleTexture;
+        } else {
+          // Moving away - use side view
+          newTexture = cybertruckLeftTexture;
+        }
+      }
+    }
+    
+    // Update texture if changed
+    if (newTexture !== truck.currentTexture) {
+      truck.material.map = newTexture;
+      truck.material.needsUpdate = true;
+      truck.currentTexture = newTexture;
+    }
+    
+    // Always face camera (billboard)
+    truck.lookAt(camera.position.x, truck.position.y, camera.position.z);
+  }
+}
+
 // ========== LIGHTING (Doom-style overhead) ==========
 // Add point lights along the corridors
 const lightPositions = [
@@ -1466,6 +1920,36 @@ function updateBullets(delta) {
         // Flash red on hit
         boss.material.color.setHex(0xff0000);
         setTimeout(() => boss.material.color.setHex(0xffffff), 100);
+        
+        scene.remove(bullet);
+        bullets.splice(i, 1);
+        break;
+      }
+    }
+    
+    // Check if bullet hits evil car
+    for (const car of evilCars) {
+      if (bullet.position.distanceTo(car.position) < 2) {
+        car.health -= 10;
+        
+        // Flash orange on hit
+        car.material.color.setHex(0xffaa00);
+        setTimeout(() => car.material.color.setHex(0xffffff), 100);
+        
+        scene.remove(bullet);
+        bullets.splice(i, 1);
+        break;
+      }
+    }
+    
+    // Check if bullet hits Cybertruck
+    for (const truck of cybertrucks) {
+      if (bullet.position.distanceTo(truck.position) < 2.5) {
+        truck.health -= 10;
+        
+        // Flash electric blue on hit (Cybertruck style!)
+        truck.material.color.setHex(0x00ffff);
+        setTimeout(() => truck.material.color.setHex(0xffffff), 100);
         
         scene.remove(bullet);
         bullets.splice(i, 1);
@@ -1744,6 +2228,8 @@ function animate() {
       updateVillains(delta);
       updateFlyingBosses(delta);
       updateFlyingBossProjectiles(delta);
+      updateEvilCars(delta);
+      updateCybertrucks(delta);
       updateHealthPacks(delta);
       updateBloodParticles(delta);
     }
