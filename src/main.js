@@ -1,11 +1,5 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { RGBShiftShader } from 'three/addons/shaders/RGBShiftShader.js';
-import { KaleidoShader } from 'three/addons/shaders/KaleidoShader.js';
 
 // Detect mobile
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 800;
@@ -32,45 +26,6 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Reduced from 2 for performance
 renderer.shadowMap.enabled = false; // Disabled for better performance
 document.body.appendChild(renderer.domElement);
-
-// ========== VIBE TUNNEL (Post-Processing) ==========
-let vibeTunnelEnabled = true; // ON by default
-let vibeTunnelTime = 0;
-
-// Effect Composer setup
-const composer = new EffectComposer(renderer);
-const renderPass = new RenderPass(scene, camera);
-composer.addPass(renderPass);
-
-// Bloom pass - dreamy glow
-const bloomPass = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.8,   // strength
-  0.4,   // radius
-  0.85   // threshold
-);
-composer.addPass(bloomPass);
-
-// RGB Shift - chromatic aberration (trippy color separation)
-const rgbShiftPass = new ShaderPass(RGBShiftShader);
-rgbShiftPass.uniforms['amount'].value = 0.003;
-rgbShiftPass.uniforms['angle'].value = 0.0;
-composer.addPass(rgbShiftPass);
-
-// Kaleido - subtle kaleidoscope warping
-const kaleidoPass = new ShaderPass(KaleidoShader);
-kaleidoPass.uniforms['sides'].value = 6;
-kaleidoPass.uniforms['angle'].value = 0.0;
-kaleidoPass.enabled = false; // Start with kaleido disabled (too intense)
-composer.addPass(kaleidoPass);
-
-// Toggle vibe tunnel with 'V' key
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyV' && gameStarted) {
-    vibeTunnelEnabled = !vibeTunnelEnabled;
-    console.log('🌀 Vibe Tunnel:', vibeTunnelEnabled ? 'ON' : 'OFF');
-  }
-});
 
 // Pointer lock controls (desktop only)
 const controls = new PointerLockControls(camera, document.body);
@@ -2303,32 +2258,15 @@ function animate() {
     }
   }
 
-  // Render with or without vibe tunnel
-  if (vibeTunnelEnabled) {
-    // Animate the vibe tunnel effects
-    vibeTunnelTime += 0.016; // ~60fps
-    
-    // Pulsing RGB shift
-    rgbShiftPass.uniforms['amount'].value = 0.002 + Math.sin(vibeTunnelTime * 2) * 0.002;
-    rgbShiftPass.uniforms['angle'].value = vibeTunnelTime * 0.5;
-    
-    // Pulsing bloom
-    bloomPass.strength = 0.6 + Math.sin(vibeTunnelTime * 1.5) * 0.3;
-    
-    composer.render();
-  } else {
-    renderer.render(scene, camera);
-  }
+  renderer.render(scene, camera);
 }
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 animate();
 
 console.log('🎮 AWS Server Room loaded!', isMobile ? '(Mobile mode)' : '(Desktop mode)');
-console.log('🌀 Press V to toggle Vibe Tunnel!');
