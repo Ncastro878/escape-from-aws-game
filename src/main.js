@@ -168,6 +168,7 @@ scene.add(ceiling);
 
 // Wall collision boxes
 const wallColliders = [];
+const playerRadius = 0.5; // Collision radius (also used for enemy wall checks)
 
 function addWallCollider(minX, maxX, minZ, maxZ) {
   wallColliders.push({ minX, maxX, minZ, maxZ });
@@ -489,8 +490,7 @@ function hasLineOfSight(zombiePos, playerPos) {
 
 // Spawn zombies around the expanded server room (reduced for performance)
 for (let i = 0; i < 18; i++) {
-  const x = (Math.random() - 0.5) * 80;  // Much larger spawn area for all the new hallways
-  const z = (Math.random() - 0.5) * 80;
+  const { x, z } = findEnemySpawnPoint(); // Guaranteed not inside a wall
   const zombie = createZombie(x, z);
   zombies.push(zombie);
   scene.add(zombie);
@@ -597,15 +597,9 @@ function updateZombies(delta) {
         zombie.direction.subVectors(camera.position, zombie.position);
         zombie.direction.y = 0;
         zombie.direction.normalize();
-        
-        const moveSpeed = zombie.speed * delta;
-        const newX = zombie.position.x + zombie.direction.x * moveSpeed;
-        const newZ = zombie.position.z + zombie.direction.z * moveSpeed;
-        
-        if (!checkWallCollision(newX, newZ)) {
-          zombie.position.x = newX;
-          zombie.position.z = newZ;
-        }
+
+        // Slide along walls instead of freezing when the direct path is blocked
+        moveEnemyWithSliding(zombie, zombie.speed * delta);
       }
       // If too close (somehow got past minimum), back up slightly
       else if (distToPlayer < minDistance - 0.5) {
@@ -949,8 +943,7 @@ function createVillain(x, z) {
 
 // Spawn villains (fewer than zombies, more dangerous) - reduced for performance
 for (let i = 0; i < 6; i++) {
-  const x = (Math.random() - 0.5) * 80;
-  const z = (Math.random() - 0.5) * 80;
+  const { x, z } = findEnemySpawnPoint(); // Guaranteed not inside a wall
   const villain = createVillain(x, z);
   villains.push(villain);
   scene.add(villain);
@@ -1042,14 +1035,8 @@ function updateVillains(delta) {
       // Only move if not too close to player (prevents disappearing behind camera)
       const minDistance = 2.5; // Stay at least this far from player
       if (distToPlayer > minDistance) {
-        const moveSpeed = villain.speed * delta;
-        const newX = villain.position.x + villain.direction.x * moveSpeed;
-        const newZ = villain.position.z + villain.direction.z * moveSpeed;
-        
-        if (!checkWallCollision(newX, newZ)) {
-          villain.position.x = newX;
-          villain.position.z = newZ;
-        }
+        // Slide along walls instead of freezing when the direct path is blocked
+        moveEnemyWithSliding(villain, villain.speed * delta);
       }
       
       // Walking animation (alternate between walk1 and walk2)
@@ -1767,7 +1754,6 @@ document.addEventListener('keyup', (e) => {
 });
 
 // Wall collision check
-const playerRadius = 0.5;
 function checkWallCollision(x, z) {
   for (const wall of wallColliders) {
     if (x + playerRadius > wall.minX && x - playerRadius < wall.maxX &&
@@ -1776,6 +1762,42 @@ function checkWallCollision(x, z) {
     }
   }
   return false;
+}
+
+// Move an enemy with wall sliding: try the full step, then X-only, then Z-only.
+// Prevents enemies from freezing in place when the direct path hits a wall.
+// If the enemy is already inside a wall (bad spawn / wedged), let it move
+// freely so it can walk itself out instead of being stuck forever.
+function moveEnemyWithSliding(enemy, moveSpeed) {
+  const newX = enemy.position.x + enemy.direction.x * moveSpeed;
+  const newZ = enemy.position.z + enemy.direction.z * moveSpeed;
+
+  if (checkWallCollision(enemy.position.x, enemy.position.z)) {
+    // Already stuck inside a wall — walk straight out (walls are thin)
+    enemy.position.x = newX;
+    enemy.position.z = newZ;
+  } else if (!checkWallCollision(newX, newZ)) {
+    enemy.position.x = newX;
+    enemy.position.z = newZ;
+  } else if (!checkWallCollision(newX, enemy.position.z)) {
+    enemy.position.x = newX; // Slide along wall on X axis
+  } else if (!checkWallCollision(enemy.position.x, newZ)) {
+    enemy.position.z = newZ; // Slide along wall on Z axis
+  }
+}
+
+// Pick a random spawn point that isn't inside a wall and isn't right on
+// top of the player (who starts at the origin).
+function findEnemySpawnPoint() {
+  let x = 0, z = 0;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    x = (Math.random() - 0.5) * 70; // Stay inside the ±35 play area
+    z = (Math.random() - 0.5) * 70;
+    if (!checkWallCollision(x, z) && Math.hypot(x, z) > 10) {
+      break;
+    }
+  }
+  return { x, z };
 }
 
 // ========== SHOOTING ==========
