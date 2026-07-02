@@ -335,6 +335,29 @@
     #npc-dialog-box:hover {
       border-color: rgba(255, 255, 255, 1);
     }
+    #npc-close {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: bold;
+      line-height: 1;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      border-radius: 6px;
+      cursor: pointer;
+      z-index: 251;
+    }
+    #npc-close:hover {
+      background: rgba(255, 80, 80, 0.4);
+      border-color: #fff;
+    }
     #npc-portrait {
       width: 100px;
       height: 100px;
@@ -369,7 +392,7 @@
       50% { opacity: 0.3; }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-BDs4S6cN.js"></script>
+  <script type="module" crossorigin src="/assets/index-TZnqEXAd.js"></script>
 </head>
 <body>
   <!-- Initial Entry Screen -->
@@ -465,6 +488,14 @@
     <source src="/villain-voice2.mp3" type="audio/mpeg">
   </audio>
   
+  <audio id="cybertruck-ram-sound">
+    <source src="/cybertruck-ram.mp3" type="audio/mpeg">
+  </audio>
+  
+  <audio id="cybertruck-charge-sound">
+    <source src="/cybertruck-charge.mp3" type="audio/mpeg">
+  </audio>
+  
   <style>
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -491,6 +522,7 @@
   
   <!-- NPC Dialog System -->
   <div id="npc-dialog-box">
+    <div id="npc-close" role="button" aria-label="Close dialogue">&times;</div>
     <img id="npc-portrait" src="" alt="NPC">
     <div id="npc-name"></div>
     <div id="npc-text"></div>

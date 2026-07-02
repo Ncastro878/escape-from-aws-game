@@ -820,6 +820,13 @@ function showDialogLine() {
     }
     npcName.textContent = currentNPC.npcName;
     npcText.textContent = currentNPC.dialogLines[dialogIndex];
+
+    // Update the hint: last line closes the dialogue instead of advancing
+    const npcContinue = document.getElementById('npc-continue');
+    if (npcContinue) {
+      const isLastLine = dialogIndex >= currentNPC.dialogLines.length - 1;
+      npcContinue.textContent = isLastLine ? 'Click/Tap to close...' : 'Click/Tap to continue...';
+    }
   }
 }
 
@@ -861,22 +868,50 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Handle click/tap on dialog box to advance
+// Handle click/tap on dialog box to advance, X button or click-away to close
 document.addEventListener('click', (e) => {
+  if (!dialogActive) return;
   const dialogBox = document.getElementById('npc-dialog-box');
-  if (dialogActive && dialogBox && dialogBox.contains(e.target)) {
-    e.stopPropagation(); // Prevent shooting
+  const closeBtn = document.getElementById('npc-close');
+  if (!dialogBox) return;
+
+  if (closeBtn && closeBtn.contains(e.target)) {
+    // X button closes the dialogue
+    e.stopImmediatePropagation(); // Prevent shooting after close
+    endDialog();
+  } else if (dialogBox.contains(e.target)) {
+    // Tapping the dialogue advances it
+    e.stopImmediatePropagation(); // Prevent shooting
     advanceDialog();
+  } else {
+    // Clicking away from the dialogue closes it
+    e.stopImmediatePropagation(); // Prevent shooting after close
+    endDialog();
   }
 });
 
 // Handle mobile tap on dialog box
 document.addEventListener('touchstart', (e) => {
+  if (!dialogActive) return;
   const dialogBox = document.getElementById('npc-dialog-box');
-  if (dialogActive && dialogBox && dialogBox.contains(e.target)) {
+  const closeBtn = document.getElementById('npc-close');
+  if (!dialogBox) return;
+
+  if (closeBtn && closeBtn.contains(e.target)) {
+    // X button closes the dialogue
+    e.preventDefault();
+    e.stopPropagation();
+    endDialog();
+  } else if (dialogBox.contains(e.target)) {
+    // Tapping the dialogue advances it
     e.preventDefault();
     e.stopPropagation();
     advanceDialog();
+  } else {
+    // Tapping away from the dialogue closes it
+    e.preventDefault();
+    e.stopPropagation();
+    endDialog();
   }
 });
 
