@@ -862,52 +862,33 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Handle click/tap on dialog box to advance, X button or click-away to close
+// While the dialogue is open, clicking anywhere advances the conversation
+// (the X button closes it). The dialogue closes itself after the last line.
 document.addEventListener('click', (e) => {
   if (!dialogActive) return;
-  const dialogBox = document.getElementById('npc-dialog-box');
-  const closeBtn = document.getElementById('npc-close');
-  if (!dialogBox) return;
+  e.stopImmediatePropagation(); // Prevent shooting while in dialogue
 
+  const closeBtn = document.getElementById('npc-close');
   if (closeBtn && closeBtn.contains(e.target)) {
-    // X button closes the dialogue
-    e.stopImmediatePropagation(); // Prevent shooting after close
     endDialog();
-  } else if (dialogBox.contains(e.target)) {
-    // Tapping the dialogue advances it
-    e.stopImmediatePropagation(); // Prevent shooting
-    advanceDialog();
   } else {
-    // Clicking away from the dialogue closes it
-    e.stopImmediatePropagation(); // Prevent shooting after close
-    endDialog();
+    advanceDialog();
   }
 });
 
-// Handle mobile tap on dialog box
+// Same for mobile: tapping anywhere advances the conversation
 document.addEventListener('touchstart', (e) => {
   if (!dialogActive) return;
-  const dialogBox = document.getElementById('npc-dialog-box');
-  const closeBtn = document.getElementById('npc-close');
-  if (!dialogBox) return;
+  e.preventDefault();
+  e.stopImmediatePropagation(); // Prevent shooting/movement while in dialogue
 
+  const closeBtn = document.getElementById('npc-close');
   if (closeBtn && closeBtn.contains(e.target)) {
-    // X button closes the dialogue
-    e.preventDefault();
-    e.stopPropagation();
     endDialog();
-  } else if (dialogBox.contains(e.target)) {
-    // Tapping the dialogue advances it
-    e.preventDefault();
-    e.stopPropagation();
-    advanceDialog();
   } else {
-    // Tapping away from the dialogue closes it
-    e.preventDefault();
-    e.stopPropagation();
-    endDialog();
+    advanceDialog();
   }
-});
+}, { passive: false }); // Non-passive so preventDefault works on mobile
 
 // ========== BALD VILLAINS ==========
 const villains = [];
