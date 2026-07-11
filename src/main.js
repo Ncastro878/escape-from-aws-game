@@ -32,7 +32,18 @@ const controls = new PointerLockControls(camera, document.body);
 
 // Game state
 let gameStarted = false;
+let gameOver = false;
 let isFiring = false;
+
+// Restart the game after death — a full reload cleanly resets all state
+const restartBtn = document.getElementById('restart-btn');
+if (restartBtn) {
+  restartBtn.addEventListener('click', () => window.location.reload());
+  restartBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    window.location.reload();
+  });
+}
 
 // Preload gun images
 const gunIdleImg = new Image();
@@ -2283,16 +2294,21 @@ function animate() {
     }
     
     // Check game over
-    if (player.health <= 0) {
+    if (player.health <= 0 && !gameOver) {
+      gameOver = true;
+      gameStarted = false;
+
       if (isMobile) {
         mobileControls.classList.remove('active');
-        blocker.style.display = 'flex';
-        gameStarted = false;
       } else {
         controls.unlock();
       }
-      alert('Game Over! Refresh to restart.');
-      player.health = 100; // Reset for next time
+
+      // Hide the weapon and show the game over screen
+      const weaponSprite = document.getElementById('weapon-sprite');
+      if (weaponSprite) weaponSprite.style.display = 'none';
+      const gameOverScreen = document.getElementById('game-over-screen');
+      if (gameOverScreen) gameOverScreen.classList.add('active');
     }
   }
 
