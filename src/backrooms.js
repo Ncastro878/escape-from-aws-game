@@ -490,6 +490,181 @@ if (isMobile && turnRightBtn) {
   turnRightBtn.addEventListener('touchend', () => { turningRight = false; });
 }
 
+// ---------- Wojak: he is here too ----------
+// Every now and then Wojak materializes somewhere ahead of the player.
+// Walk up to him and he shares what the yellow has taught him (same
+// click-through dialog as the main game). Afterwards he just... stays.
+const WOJAK_DIALOG_SETS = [
+  [
+    "You hear it too, don't you? The buzz. It never stops.",
+    "I've been walking for... days? Years? The carpet remembers my footsteps, but I don't.",
+    "Every hallway looks the same because it IS the same. We never left.",
+    "Keep moving. It doesn't like it when you stand still."
+  ],
+  [
+    "You noclipped too, huh? Rookie mistake.",
+    "I counted the ceiling lights once. I got to forty thousand and then they started counting me.",
+    "There is no exit. There was never an exit. The exit is a rumor the walls tell.",
+    "Don't trust the yellow. The yellow is hungry."
+  ],
+  [
+    "Shhh. You smell that? Moist carpet. It gets stronger when it's near.",
+    "I saw another one of you last week. He turned a corner and just... wasn't.",
+    "The lights flicker when it's close. Watch the lights.",
+    "If you hear humming that isn't the lights... run."
+  ],
+  [
+    "Level 0. The Lobby. That's what the old-timers call it.",
+    "I used to work in the AWS server room, you know. One day I clipped through the floor... and woke up here.",
+    "Time doesn't pass here. Check your watch. It's been lying to you.",
+    "You should go home. Wait... you can't. Heh. Heh heh."
+  ],
+  [
+    "Back again? No... no, you're a new one. You're all new ones.",
+    "These walls taste like almonds. Don't ask how I know that.",
+    "Whatever you do, don't fall asleep on the carpet. It's moist for a reason.",
+    "See you around, anon. And around. And around. And around."
+  ]
+];
+
+const wojakTexture = new THREE.TextureLoader().load('/npc-hoodie-guy.png');
+const wojakMaterial = new THREE.SpriteMaterial({
+  map: wojakTexture,
+  transparent: true,
+  alphaTest: 0.5,
+  depthWrite: false,
+  fog: true
+});
+
+const wojaks = [];
+let dialogActive = false;
+let dialogIndex = 0;
+let currentNPC = null;
+let lastDialogAdvanceTime = 0;
+const dialogAdvanceCooldown = 500;
+let nextWojakTimer = 15 + Math.random() * 20; // first appearance ~15-35s in
+const MAX_WOJAKS = 4;
+
+function spawnWojak() {
+  // Find an open spot 14-28 units away from the player (out in the fog, so
+  // he's discovered rather than seen appearing)
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 14 + Math.random() * 14;
+    const x = camera.position.x + Math.cos(angle) * dist;
+    const z = camera.position.z + Math.sin(angle) * dist;
+    if (checkWallCollision(x, z)) continue;
+
+    const sprite = new THREE.Sprite(wojakMaterial);
+    sprite.scale.set(2.0, 2.8, 1);
+    sprite.position.set(x, 1.4, z);
+    sprite.dialogLines = WOJAK_DIALOG_SETS[Math.floor(Math.random() * WOJAK_DIALOG_SETS.length)];
+    sprite.hasSpoken = false;
+    scene.add(sprite);
+    wojaks.push(sprite);
+    return true;
+  }
+  return false;
+}
+
+function updateWojaks(delta) {
+  // Materialize a new one every now and then
+  nextWojakTimer -= delta;
+  if (nextWojakTimer <= 0 && wojaks.length < MAX_WOJAKS) {
+    spawnWojak();
+    nextWojakTimer = 30 + Math.random() * 45; // next one in 30-75s
+  }
+
+  for (let i = wojaks.length - 1; i >= 0; i--) {
+    const npc = wojaks[i];
+    const distToPlayer = npc.position.distanceTo(camera.position);
+
+    // He stays where he is — but once he's long gone into the fog and his
+    // chunks have unloaded, he quietly returns to the yellow
+    if (distToPlayer > 130) {
+      scene.remove(npc);
+      wojaks.splice(i, 1);
+      continue;
+    }
+
+    // Walk into him and he speaks (once)
+    if (distToPlayer < 3 && !dialogActive && !npc.hasSpoken) {
+      npc.hasSpoken = true;
+      startDialog(npc);
+    }
+  }
+}
+
+function startDialog(npc) {
+  dialogActive = true;
+  dialogIndex = 0;
+  currentNPC = npc;
+  lastDialogAdvanceTime = 0;
+  showDialogLine();
+}
+
+function showDialogLine() {
+  const dialogBox = document.getElementById('npc-dialog-box');
+  if (!dialogBox || !currentNPC) return;
+  dialogBox.classList.add('active');
+  document.getElementById('npc-portrait').src = '/npc-hoodie-guy.png';
+  document.getElementById('npc-name').textContent = 'Wojak';
+  document.getElementById('npc-text').textContent = currentNPC.dialogLines[dialogIndex];
+  const npcContinue = document.getElementById('npc-continue');
+  const isLastLine = dialogIndex >= currentNPC.dialogLines.length - 1;
+  npcContinue.textContent = isLastLine ? 'Click/Tap to close...' : 'Click/Tap to continue...';
+}
+
+function advanceDialog() {
+  if (!currentNPC) return;
+  const now = Date.now();
+  if (now - lastDialogAdvanceTime < dialogAdvanceCooldown) return;
+  lastDialogAdvanceTime = now;
+
+  dialogIndex++;
+  if (dialogIndex >= currentNPC.dialogLines.length) {
+    endDialog();
+  } else {
+    showDialogLine();
+  }
+}
+
+function endDialog() {
+  dialogActive = false;
+  dialogIndex = 0;
+  currentNPC = null;
+  const dialogBox = document.getElementById('npc-dialog-box');
+  if (dialogBox) dialogBox.classList.remove('active');
+}
+
+// While the dialogue is open, clicking anywhere advances it (X closes it)
+document.addEventListener('click', (e) => {
+  if (!dialogActive) return;
+  e.stopImmediatePropagation();
+  const closeBtn = document.getElementById('npc-close');
+  if (closeBtn && closeBtn.contains(e.target)) {
+    endDialog();
+  } else {
+    advanceDialog();
+  }
+});
+
+document.addEventListener('touchstart', (e) => {
+  if (!dialogActive) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const closeBtn = document.getElementById('npc-close');
+  if (closeBtn && closeBtn.contains(e.target)) {
+    endDialog();
+  } else {
+    advanceDialog();
+  }
+}, { passive: false });
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyE' && dialogActive) advanceDialog();
+});
+
 // ---------- Player ----------
 const player = {
   velocity: new THREE.Vector3(),
@@ -612,7 +787,10 @@ function animate() {
   const isPlaying = isMobile ? gameStarted : controls.isLocked;
 
   if (isPlaying) {
-    updatePlayer(delta);
+    if (!dialogActive) {
+      updatePlayer(delta);
+      updateWojaks(delta);
+    }
     updateChunks();
     updateFlicker(delta);
     updateHUD(delta);
@@ -634,7 +812,11 @@ window.__backrooms = {
   camera,
   updateChunks,
   checkWallCollision,
-  chunkCount: () => loadedChunks.size
+  chunkCount: () => loadedChunks.size,
+  spawnWojak,
+  updateWojaks,
+  wojaks,
+  isDialogActive: () => dialogActive
 };
 
 console.log('🟨 The Backrooms loaded. There is no exit.', isMobile ? '(Mobile mode)' : '(Desktop mode)');
