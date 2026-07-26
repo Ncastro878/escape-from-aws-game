@@ -31,9 +31,9 @@ const PLAYER_RADIUS = 0.45;
 
 // ---------- Scene ----------
 const scene = new THREE.Scene();
-const FOG_COLOR = 0x4a4126;
+const FOG_COLOR = 0x2b2514;
 scene.background = new THREE.Color(FOG_COLOR);
-scene.fog = new THREE.Fog(FOG_COLOR, 8, 55);
+scene.fog = new THREE.Fog(FOG_COLOR, 8, 50);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(CELL / 2, EYE_HEIGHT, CELL / 2); // spawn in a guaranteed-open corridor cell
@@ -104,47 +104,64 @@ const carpetTexture = makeTexture(256, (ctx, s) => {
 });
 carpetTexture.repeat.set(CHUNK_CELLS, CHUNK_CELLS);
 
-// Ceiling: 2x2 acoustic tiles, one of which is a fluorescent light panel.
-// Texture spans 2 cells, so there's a light every other cell (every 8 units).
-const ceilingTexture = makeTexture(256, (ctx, s) => {
-  const t = s / 2;
-  for (let i = 0; i < 2; i++) {
-    for (let j = 0; j < 2; j++) {
-      const isLight = i === 0 && j === 0;
-      ctx.fillStyle = isLight ? '#fffbe0' : '#d8d2a4';
-      ctx.fillRect(i * t, j * t, t, t);
-      if (isLight) {
-        const g = ctx.createRadialGradient(i * t + t / 2, j * t + t / 2, 5, i * t + t / 2, j * t + t / 2, t / 1.4);
-        g.addColorStop(0, 'rgba(255,255,240,1)');
-        g.addColorStop(1, 'rgba(240,230,180,0.4)');
-        ctx.fillStyle = g;
-        ctx.fillRect(i * t + 8, j * t + 8, t - 16, t - 16);
-      } else {
-        // speckled acoustic tile
-        for (let k = 0; k < 250; k++) {
-          ctx.fillStyle = `rgba(90,82,50,${Math.random() * 0.15})`;
-          ctx.fillRect(i * t + Math.random() * t, j * t + Math.random() * t, 1.5, 1.5);
-        }
-      }
-      ctx.strokeStyle = '#8a8258';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(i * t + 1.5, j * t + 1.5, t - 3, t - 3);
-    }
+// Ceiling tiles are placed per cell so light fixtures can be sparse and
+// irregular. Two variants: a plain acoustic tile and one with a recessed
+// rectangular fluorescent fixture built into it.
+function drawCeilingBase(ctx, s) {
+  ctx.fillStyle = '#d8d2a4';
+  ctx.fillRect(0, 0, s, s);
+  for (let k = 0; k < 900; k++) {
+    ctx.fillStyle = `rgba(90,82,50,${Math.random() * 0.15})`;
+    ctx.fillRect(Math.random() * s, Math.random() * s, 1.5, 1.5);
+  }
+  ctx.strokeStyle = '#8a8258';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(2, 2, s - 4, s - 4);
+}
+
+const ceilingPlainTexture = makeTexture(128, drawCeilingBase);
+
+const ceilingLightTexture = makeTexture(128, (ctx, s) => {
+  drawCeilingBase(ctx, s);
+  // recessed rectangular office light fixture
+  const inset = 26;
+  ctx.fillStyle = '#6e6640';
+  ctx.fillRect(inset - 4, inset - 4, s - (inset - 4) * 2, s - (inset - 4) * 2); // frame shadow
+  const g = ctx.createRadialGradient(s / 2, s / 2, 6, s / 2, s / 2, s / 2 - inset + 14);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.7, '#fffbe0');
+  g.addColorStop(1, '#efe4ac');
+  ctx.fillStyle = g;
+  ctx.fillRect(inset, inset, s - inset * 2, s - inset * 2);
+  // diffuser ribs
+  ctx.strokeStyle = 'rgba(200,190,140,0.5)';
+  ctx.lineWidth = 2;
+  for (let x = inset + 8; x < s - inset; x += 12) {
+    ctx.beginPath();
+    ctx.moveTo(x, inset);
+    ctx.lineTo(x, s - inset);
+    ctx.stroke();
   }
 });
-ceilingTexture.repeat.set(CHUNK_CELLS / 2, CHUNK_CELLS / 2);
 
 // ---------- Shared geometry & materials (one of each, reused by all chunks) ----------
+// Baked brightness rides in as instance colors (walls, ceiling tiles) and
+// vertex colors (floor), all of which multiply the material color.
 const wallMaterial = new THREE.MeshLambertMaterial({ map: wallTexture });
-const floorMaterial = new THREE.MeshLambertMaterial({ map: carpetTexture });
-const ceilingMaterial = new THREE.MeshLambertMaterial({
-  map: ceilingTexture,
-  emissive: 0xfff6d0,
-  emissiveMap: ceilingTexture,
-  emissiveIntensity: 0.55
+const floorMaterial = new THREE.MeshLambertMaterial({ map: carpetTexture, vertexColors: true });
+const ceilingPlainMaterial = new THREE.MeshLambertMaterial({ map: ceilingPlainTexture });
+const ceilingLightMaterial = new THREE.MeshLambertMaterial({
+  map: ceilingLightTexture,
+  emissive: 0xfff8d8,
+  emissiveMap: ceilingLightTexture,
+  emissiveIntensity: 0.9
 });
 const wallGeometry = new THREE.BoxGeometry(CELL, WALL_HEIGHT, CELL);
-const planeGeometry = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE);
+// per-cell ceiling tile, pre-rotated to face down so instances are pure translations
+const ceilingTileGeometry = new THREE.PlaneGeometry(CELL, CELL);
+ceilingTileGeometry.rotateX(Math.PI / 2);
+// floor plane subdivided per cell so brightness can vary smoothly across it
+const floorGeometryTemplate = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_CELLS, CHUNK_CELLS);
 
 // ---------- Deterministic layout generation ----------
 // 2D integer hash -> 32-bit seed
@@ -169,25 +186,53 @@ const mod = (n, m) => ((n % m) + m) % m;
 
 // The map is carved into 4x4-cell "blocks" separated by guaranteed-open
 // corridor lanes (every cell where gx%5==0 or gz%5==0 is always walkable).
-// Each block gets random partition walls / pillars seeded by its own coords.
+// Each block rolls a zone type, so the world is mostly narrow hallways
+// (solid blocks turn the lanes into corridors) with denser maze pockets,
+// the occasional sparse-partition room, and some wide open areas.
 function fillBlock(layout, localOx, localOz, rng) {
-  const roll = rng();
-  const segmentCount = roll < 0.15 ? 0 : roll < 0.6 ? 1 : roll < 0.9 ? 2 : 3;
-  for (let sIdx = 0; sIdx < segmentCount; sIdx++) {
-    const horizontal = rng() < 0.5;
-    const length = 2 + Math.floor(rng() * 3); // 2-4 cells
-    const startX = Math.floor(rng() * 4);
-    const startZ = Math.floor(rng() * 4);
-    for (let k = 0; k < length; k++) {
-      const lx = localOx + (horizontal ? Math.min(startX + k, 3) : startX);
-      const lz = localOz + (horizontal ? startZ : Math.min(startZ + k, 3));
-      layout[lz * CHUNK_CELLS + lx] = 1;
+  const zone = rng();
+
+  if (zone < 0.40) {
+    // SOLID: the whole block is wall — the lanes around it become hallways
+    for (let dx = 0; dx < 4; dx++) {
+      for (let dz = 0; dz < 4; dz++) {
+        layout[(localOz + dz) * CHUNK_CELLS + localOx + dx] = 1;
+      }
     }
+    return;
   }
-  if (rng() < 0.25) {
-    // a lone pillar
-    layout[(localOz + Math.floor(rng() * 4)) * CHUNK_CELLS + localOx + Math.floor(rng() * 4)] = 1;
+
+  if (zone < 0.62) {
+    // MAZE: dense random fill — nooks, alcoves and short dead ends
+    for (let dx = 0; dx < 4; dx++) {
+      for (let dz = 0; dz < 4; dz++) {
+        if (rng() < 0.5) layout[(localOz + dz) * CHUNK_CELLS + localOx + dx] = 1;
+      }
+    }
+    return;
   }
+
+  if (zone < 0.78) {
+    // SPARSE: a couple of partition walls, like a half-hearted office
+    const segmentCount = 1 + Math.floor(rng() * 2);
+    for (let sIdx = 0; sIdx < segmentCount; sIdx++) {
+      const horizontal = rng() < 0.5;
+      const length = 2 + Math.floor(rng() * 3); // 2-4 cells
+      const startX = Math.floor(rng() * 4);
+      const startZ = Math.floor(rng() * 4);
+      for (let k = 0; k < length; k++) {
+        const lx = localOx + (horizontal ? Math.min(startX + k, 3) : startX);
+        const lz = localOz + (horizontal ? startZ : Math.min(startZ + k, 3));
+        layout[lz * CHUNK_CELLS + lx] = 1;
+      }
+    }
+    if (rng() < 0.25) {
+      layout[(localOz + Math.floor(rng() * 4)) * CHUNK_CELLS + localOx + Math.floor(rng() * 4)] = 1;
+    }
+    return;
+  }
+
+  // OPEN: nothing — adjacent open blocks merge into wide empty halls
 }
 
 // Layouts are tiny (100 bytes each) so the cache can just grow — even hours
@@ -220,6 +265,41 @@ function isSolidCell(gx, gz) {
   return layout[(gz - cz * CHUNK_CELLS) * CHUNK_CELLS + (gx - cx * CHUNK_CELLS)] === 1;
 }
 
+// ---------- Lighting field ----------
+// Ceiling light fixtures are sparse and deterministic, and whole 8x8-cell
+// regions are "dead" (no working lights at all). Surface brightness is the
+// falloff from the nearest fixture, baked into vertex/instance colors when
+// a chunk is built — so dark hallways sit next to lit ones and light appears
+// to spill in from around the corner, with zero runtime lighting cost.
+const MIN_BRIGHTNESS = 0.14;
+const LIGHT_RADIUS_CELLS = 3.4;
+
+function hasLight(gx, gz) {
+  if (isSolidCell(gx, gz)) return false;
+  // dead regions: about a third of the map has no working lights
+  const rx = Math.floor(gx / 8);
+  const rz = Math.floor(gz / 8);
+  if (hash2(rx * 13 + 101, rz * 13 + 57) / 4294967296 < 0.33) return false;
+  const roll = hash2(gx * 3 + 7, gz * 3 - 5) / 4294967296;
+  const onLane = mod(gx, 5) === 0 || mod(gz, 5) === 0;
+  return roll < (onLane ? 0.32 : 0.16);
+}
+
+function brightnessAt(x, z) {
+  const cgx = Math.floor(x / CELL);
+  const cgz = Math.floor(z / CELL);
+  let b = MIN_BRIGHTNESS;
+  for (let gx = cgx - 3; gx <= cgx + 3; gx++) {
+    for (let gz = cgz - 3; gz <= cgz + 3; gz++) {
+      if (!hasLight(gx, gz)) continue;
+      const dist = Math.hypot(x - (gx * CELL + CELL / 2), z - (gz * CELL + CELL / 2)) / CELL;
+      const contribution = MIN_BRIGHTNESS + (1 - MIN_BRIGHTNESS) * Math.max(0, 1 - dist / LIGHT_RADIUS_CELLS);
+      if (contribution > b) b = contribution;
+    }
+  }
+  return b;
+}
+
 // Collision straight off the grid — no collider lists needed
 function checkWallCollision(x, z) {
   const minGX = Math.floor((x - PLAYER_RADIUS) / CELL);
@@ -237,41 +317,86 @@ function checkWallCollision(x, z) {
 // ---------- Chunk mesh lifecycle ----------
 const loadedChunks = new Map(); // "cx,cz" -> THREE.Group
 
+const tmpMatrix = new THREE.Matrix4();
+const tmpColor = new THREE.Color();
+
 function buildChunk(cx, cz) {
   const layout = chunkLayout(cx, cz);
   const group = new THREE.Group();
   const originX = cx * CHUNK_SIZE;
   const originZ = cz * CHUNK_SIZE;
+  const centerX = originX + CHUNK_SIZE / 2;
+  const centerZ = originZ + CHUNK_SIZE / 2;
 
-  const floor = new THREE.Mesh(planeGeometry, floorMaterial);
+  // Floor: per-chunk geometry clone with the brightness field baked into
+  // vertex colors (smooth gradients — light spilling around corners)
+  const floorGeometry = floorGeometryTemplate.clone();
+  const positions = floorGeometry.attributes.position;
+  const colors = new Float32Array(positions.count * 3);
+  for (let i = 0; i < positions.count; i++) {
+    // plane is rotated -90deg about X: local (x, y) -> world (x, -y)
+    const b = brightnessAt(centerX + positions.getX(i), centerZ - positions.getY(i));
+    colors[i * 3] = colors[i * 3 + 1] = colors[i * 3 + 2] = b;
+  }
+  floorGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(originX + CHUNK_SIZE / 2, 0, originZ + CHUNK_SIZE / 2);
+  floor.position.set(centerX, 0, centerZ);
   group.add(floor);
 
-  const ceiling = new THREE.Mesh(planeGeometry, ceilingMaterial);
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(originX + CHUNK_SIZE / 2, WALL_HEIGHT, originZ + CHUNK_SIZE / 2);
-  group.add(ceiling);
-
-  // All wall cells in this chunk share a single InstancedMesh (1 draw call)
+  // Classify cells: walls, lit ceiling tiles, plain ceiling tiles.
+  // (No ceiling needed above solid cells — the wall box fills the space.)
   const solidCells = [];
+  const litCells = [];
+  const plainCells = [];
   for (let lz = 0; lz < CHUNK_CELLS; lz++) {
     for (let lx = 0; lx < CHUNK_CELLS; lx++) {
-      if (layout[lz * CHUNK_CELLS + lx]) solidCells.push([lx, lz]);
+      const gx = cx * CHUNK_CELLS + lx;
+      const gz = cz * CHUNK_CELLS + lz;
+      if (layout[lz * CHUNK_CELLS + lx]) {
+        solidCells.push([lx, lz]);
+      } else if (hasLight(gx, gz)) {
+        litCells.push([lx, lz]);
+      } else {
+        plainCells.push([lx, lz]);
+      }
     }
   }
+
+  const cellCenter = (l, origin) => origin + l * CELL + CELL / 2;
+
   if (solidCells.length > 0) {
     const walls = new THREE.InstancedMesh(wallGeometry, wallMaterial, solidCells.length);
-    const matrix = new THREE.Matrix4();
     solidCells.forEach(([lx, lz], i) => {
-      matrix.setPosition(
-        originX + lx * CELL + CELL / 2,
-        WALL_HEIGHT / 2,
-        originZ + lz * CELL + CELL / 2
-      );
-      walls.setMatrixAt(i, matrix);
+      const x = cellCenter(lx, originX);
+      const z = cellCenter(lz, originZ);
+      tmpMatrix.setPosition(x, WALL_HEIGHT / 2, z);
+      walls.setMatrixAt(i, tmpMatrix);
+      const b = brightnessAt(x, z);
+      walls.setColorAt(i, tmpColor.setScalar(b));
     });
     group.add(walls);
+  }
+
+  if (litCells.length > 0) {
+    const lit = new THREE.InstancedMesh(ceilingTileGeometry, ceilingLightMaterial, litCells.length);
+    litCells.forEach(([lx, lz], i) => {
+      tmpMatrix.setPosition(cellCenter(lx, originX), WALL_HEIGHT, cellCenter(lz, originZ));
+      lit.setMatrixAt(i, tmpMatrix);
+    });
+    group.add(lit);
+  }
+
+  if (plainCells.length > 0) {
+    const plain = new THREE.InstancedMesh(ceilingTileGeometry, ceilingPlainMaterial, plainCells.length);
+    plainCells.forEach(([lx, lz], i) => {
+      const x = cellCenter(lx, originX);
+      const z = cellCenter(lz, originZ);
+      tmpMatrix.setPosition(x, WALL_HEIGHT, z);
+      plain.setMatrixAt(i, tmpMatrix);
+      plain.setColorAt(i, tmpColor.setScalar(brightnessAt(x, z)));
+    });
+    group.add(plain);
   }
 
   scene.add(group);
@@ -283,8 +408,12 @@ function disposeChunk(key) {
   if (!group) return;
   scene.remove(group);
   group.traverse((obj) => {
-    // geometry/materials are shared — only free per-chunk instance buffers
-    if (obj.isInstancedMesh) obj.dispose();
+    // materials and template geometries are shared; free per-chunk buffers
+    if (obj.isInstancedMesh) {
+      obj.dispose();
+    } else if (obj.isMesh && obj.geometry !== floorGeometryTemplate) {
+      obj.geometry.dispose(); // per-chunk floor clone with baked vertex colors
+    }
   });
   loadedChunks.delete(key);
 }
@@ -813,6 +942,8 @@ window.__backrooms = {
   updateChunks,
   checkWallCollision,
   chunkCount: () => loadedChunks.size,
+  brightnessAt,
+  hasLight,
   spawnWojak,
   updateWojaks,
   wojaks,
