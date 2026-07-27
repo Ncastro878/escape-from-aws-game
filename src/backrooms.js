@@ -231,6 +231,86 @@ function buildHouseTextures() {
   return { wall, floor, ceilPlain, ceilLight };
 }
 
+// --- Level 37: the poolrooms ---
+function buildPoolroomsTextures() {
+  // White square tiles with thin grout, the odd aqua accent tile
+  const drawTiles = (ctx, s, tile, accentChance) => {
+    ctx.fillStyle = '#c3d2d0';
+    ctx.fillRect(0, 0, s, s);
+    for (let ty = 0; ty < s / tile; ty++) {
+      for (let tx = 0; tx < s / tile; tx++) {
+        const accent = Math.random() < accentChance;
+        ctx.fillStyle = accent ? '#bcdedd' : (Math.random() < 0.5 ? '#f2f6f5' : '#ecf2f1');
+        ctx.fillRect(tx * tile + 1, ty * tile + 1, tile - 2, tile - 2);
+        // soft top-edge highlight on each tile
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillRect(tx * tile + 1, ty * tile + 1, tile - 2, 2);
+      }
+    }
+  };
+
+  const wall = makeTexture(256, (ctx, s) => drawTiles(ctx, s, 32, 0.07));
+  const floor = makeTexture(256, (ctx, s) => drawTiles(ctx, s, 42, 0.04));
+  floor.repeat.set(CHUNK_CELLS, CHUNK_CELLS);
+
+  const drawCoolPlaster = (ctx, s) => {
+    ctx.fillStyle = '#f1f5f4';
+    ctx.fillRect(0, 0, s, s);
+    for (let k = 0; k < 400; k++) {
+      ctx.fillStyle = `rgba(170,185,183,${Math.random() * 0.1})`;
+      ctx.fillRect(Math.random() * s, Math.random() * s, 1.5, 1.5);
+    }
+  };
+
+  const ceilPlain = makeTexture(128, drawCoolPlaster);
+
+  // big soft skylight
+  const ceilLight = makeTexture(128, (ctx, s) => {
+    drawCoolPlaster(ctx, s);
+    const inset = 18;
+    ctx.fillStyle = '#c9d4d2';
+    ctx.fillRect(inset - 5, inset - 5, s - (inset - 5) * 2, s - (inset - 5) * 2);
+    const g = ctx.createRadialGradient(s / 2, s / 2, 4, s / 2, s / 2, s / 2 - inset + 16);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(1, '#eaf4f6');
+    ctx.fillStyle = g;
+    ctx.fillRect(inset, inset, s - inset * 2, s - inset * 2);
+  });
+
+  return { wall, floor, ceilPlain, ceilLight };
+}
+
+// Shared water surface: caustic shimmer texture, scrolled slowly each frame
+const waterTexture = makeTexture(256, (ctx, s) => {
+  ctx.fillStyle = '#7fc4d4';
+  ctx.fillRect(0, 0, s, s);
+  for (let i = 0; i < 70; i++) {
+    ctx.strokeStyle = `rgba(255,255,255,${0.12 + Math.random() * 0.25})`;
+    ctx.lineWidth = 1.5 + Math.random() * 3;
+    ctx.beginPath();
+    const a = Math.random() * Math.PI * 2;
+    ctx.arc(Math.random() * s, Math.random() * s, 8 + Math.random() * 30, a, a + 1.2 + Math.random() * 2.2);
+    ctx.stroke();
+  }
+  for (let i = 0; i < 25; i++) {
+    ctx.fillStyle = `rgba(60,140,160,${Math.random() * 0.2})`;
+    const x = Math.random() * s, y = Math.random() * s, r = 8 + Math.random() * 20;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+});
+const waterMaterial = new THREE.MeshBasicMaterial({
+  map: waterTexture,
+  transparent: true,
+  opacity: 0.55,
+  depthWrite: false,
+  color: 0xbfe8f0
+});
+const waterTileGeometry = new THREE.PlaneGeometry(CELL, CELL);
+waterTileGeometry.rotateX(-Math.PI / 2);
+const WATER_LEVEL = 0.32;
+
 // ---------- Level definitions ----------
 const LEVELS = {
   backrooms: {
@@ -269,10 +349,32 @@ const LEVELS = {
     zones: { solid: 0.30, maze: 0.38, sparse: 0.70 },
     flicker: false,
     wojaks: false,
-    doorTarget: 'backrooms',
+    doorTarget: 'pools',
     doorStyle: 'white',
     hum: { f1: 90, f2: 45, gain: 0.01 },
     buildTextures: buildHouseTextures
+  },
+  pools: {
+    id: 'pools',
+    hudName: 'LEVEL 37',
+    salt: 2,
+    fogColor: 0xcfe0e2, fogNear: 10, fogFar: 55,
+    ambientColor: 0xffffff, ambientIntensity: 0.95,
+    hemiSky: 0xffffff, hemiGround: 0xbcd4d6, hemiIntensity: 1.0,
+    emissiveColor: 0xffffff, emissiveIntensity: 0.7,
+    minBrightness: 0.55,
+    deadRegionChance: 0,
+    laneLightChance: 0.4,
+    openLightChance: 0.3,
+    // mostly open tiled halls; over half of the open blocks become pools
+    zones: { solid: 0.22, maze: 0.30, sparse: 0.42 },
+    poolChance: 0.55,
+    flicker: false,
+    wojaks: false,
+    doorTarget: 'backrooms',
+    doorStyle: 'white',
+    hum: { f1: 65, f2: 32, gain: 0.012 },
+    buildTextures: buildPoolroomsTextures
   }
 };
 
@@ -327,7 +429,9 @@ const mod = (n, m) => ((n % m) + m) % m;
 // Each block rolls a zone type from the level's mix — solid blocks turn the
 // lanes into narrow hallways, maze blocks add nooks and dead ends, sparse
 // blocks read as half-empty rooms, open blocks merge into wide halls.
-function fillBlock(layout, localOx, localOz, rng, zones) {
+// Cell values: 0 = open floor, 1 = solid wall, 2 = shallow water (walkable)
+function fillBlock(layout, localOx, localOz, rng, level) {
+  const zones = level.zones;
   const zone = rng();
 
   if (zone < zones.solid) {
@@ -367,7 +471,14 @@ function fillBlock(layout, localOx, localOz, rng, zones) {
     return;
   }
 
-  // OPEN: nothing
+  // OPEN — in levels with pools, some open blocks fill with shallow water
+  if (level.poolChance && rng() < level.poolChance) {
+    for (let dx = 0; dx < 4; dx++) {
+      for (let dz = 0; dz < 4; dz++) {
+        layout[(localOz + dz) * CHUNK_CELLS + localOx + dx] = 2;
+      }
+    }
+  }
 }
 
 // Layouts are tiny (100 bytes each) so the cache can just grow — even hours
@@ -383,19 +494,28 @@ function chunkLayout(cx, cz) {
   for (let bi = 0; bi < 2; bi++) {
     for (let bj = 0; bj < 2; bj++) {
       const rng = mulberry32(hash2(cx * 2 + bi + salt * 100003, cz * 2 + bj + salt * 50021));
-      fillBlock(layout, bi * 5 + 1, bj * 5 + 1, rng, currentLevel.zones);
+      fillBlock(layout, bi * 5 + 1, bj * 5 + 1, rng, currentLevel);
     }
   }
   layoutCache.set(key, layout);
   return layout;
 }
 
-function isSolidCell(gx, gz) {
-  if (mod(gx, 5) === 0 || mod(gz, 5) === 0) return false; // corridor lanes
+function cellValue(gx, gz) {
+  if (mod(gx, 5) === 0 || mod(gz, 5) === 0) return 0; // corridor lanes always open
   const cx = Math.floor(gx / CHUNK_CELLS);
   const cz = Math.floor(gz / CHUNK_CELLS);
   const layout = chunkLayout(cx, cz);
-  return layout[(gz - cz * CHUNK_CELLS) * CHUNK_CELLS + (gx - cx * CHUNK_CELLS)] === 1;
+  return layout[(gz - cz * CHUNK_CELLS) * CHUNK_CELLS + (gx - cx * CHUNK_CELLS)];
+}
+
+function isSolidCell(gx, gz) {
+  return cellValue(gx, gz) === 1;
+}
+
+// Is this world position in shallow water?
+function isWadingAt(x, z) {
+  return cellValue(Math.floor(x / CELL), Math.floor(z / CELL)) === 2;
 }
 
 // ---------- Lighting field ----------
@@ -479,17 +599,23 @@ function buildChunk(cx, cz) {
   floor.position.set(centerX, 0, centerZ);
   group.add(floor);
 
-  // Classify cells: walls, lit ceiling tiles, plain ceiling tiles.
+  // Classify cells: walls, water, lit ceiling tiles, plain ceiling tiles.
   const solidCells = [];
   const litCells = [];
   const plainCells = [];
+  const waterCells = [];
   for (let lz = 0; lz < CHUNK_CELLS; lz++) {
     for (let lx = 0; lx < CHUNK_CELLS; lx++) {
       const gx = cx * CHUNK_CELLS + lx;
       const gz = cz * CHUNK_CELLS + lz;
-      if (layout[lz * CHUNK_CELLS + lx]) {
+      const value = layout[lz * CHUNK_CELLS + lx];
+      const onLane = mod(gx, 5) === 0 || mod(gz, 5) === 0;
+      if (value === 1 && !onLane) {
         solidCells.push([lx, lz]);
-      } else if (hasLight(gx, gz)) {
+        continue;
+      }
+      if (value === 2 && !onLane) waterCells.push([lx, lz]);
+      if (hasLight(gx, gz)) {
         litCells.push([lx, lz]);
       } else {
         plainCells.push([lx, lz]);
@@ -530,6 +656,15 @@ function buildChunk(cx, cz) {
       plain.setColorAt(i, tmpColor.setScalar(brightnessAt(x, z)));
     });
     group.add(plain);
+  }
+
+  if (waterCells.length > 0) {
+    const water = new THREE.InstancedMesh(waterTileGeometry, waterMaterial, waterCells.length);
+    waterCells.forEach(([lx, lz], i) => {
+      tmpMatrix.setPosition(cellCenter(lx, originX), WATER_LEVEL, cellCenter(lz, originZ));
+      water.setMatrixAt(i, tmpMatrix);
+    });
+    group.add(water);
   }
 
   scene.add(group);
@@ -1165,8 +1300,12 @@ function updatePlayer(delta) {
   player.direction.x = Number(keys.right) - Number(keys.left);
   player.direction.normalize();
 
+  // wading through a pool slows you down
+  const wading = isWadingAt(camera.position.x, camera.position.z);
+  const speed = player.speed * (wading ? 0.55 : 1);
+
   if (isMobile) {
-    const moveSpeed = player.speed * delta;
+    const moveSpeed = speed * delta;
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
     forward.y = 0;
@@ -1187,8 +1326,8 @@ function updatePlayer(delta) {
     const oldX = camera.position.x;
     const oldZ = camera.position.z;
 
-    if (keys.forward || keys.backward) controls.moveForward(player.direction.z * player.speed * delta);
-    if (keys.left || keys.right) controls.moveRight(player.direction.x * player.speed * delta);
+    if (keys.forward || keys.backward) controls.moveForward(player.direction.z * speed * delta);
+    if (keys.left || keys.right) controls.moveRight(player.direction.x * speed * delta);
 
     const newX = camera.position.x;
     const newZ = camera.position.z;
@@ -1204,8 +1343,8 @@ function updatePlayer(delta) {
     }
   }
 
-  // Walking mini-hops, same feel as the main game
-  const isMoving = keys.forward || keys.backward || keys.left || keys.right;
+  // Walking mini-hops, same feel as the main game (suppressed while wading)
+  const isMoving = (keys.forward || keys.backward || keys.left || keys.right) && !wading;
   if (isMoving && player.onGround) {
     player.lastHopTime += delta;
     if (player.lastHopTime >= player.hopInterval) {
@@ -1305,6 +1444,10 @@ function animate() {
     updateHUD(delta);
   }
 
+  // gentle caustic shimmer on any visible water
+  waterTexture.offset.x = (waterTexture.offset.x + delta * 0.02) % 1;
+  waterTexture.offset.y = (waterTexture.offset.y + delta * 0.013) % 1;
+
   renderer.render(scene, camera);
 }
 
@@ -1334,7 +1477,9 @@ window.__backrooms = {
   updateDoors,
   setLevel,
   getLevel: () => currentLevel.id,
-  isTransitioning: () => doorTransitioning
+  isTransitioning: () => doorTransitioning,
+  isWadingAt,
+  cellValue
 };
 
 console.log('🟨 The Backrooms loaded. There is no exit. (Or is there?)', isMobile ? '(Mobile mode)' : '(Desktop mode)');
